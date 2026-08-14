@@ -374,14 +374,20 @@
 </div>
 
 <script>
-  // --- INICIO DEL PARCHE PARA VERCEL ---
-window.save = async function(key, value, shared) {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-};
-window.load = async function(key, shared) {
+// --- INICIO DEL PARCHE PARA VERCEL ---
+window.storage = {
+  get: async function(key, shared) {
     const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
+    return data ? { value: data } : null;
+  },
+  set: async function(key, value, shared) {
+    localStorage.setItem(key, value);
+    return true;
+  },
+  delete: async function(key, shared) {
+    localStorage.removeItem(key);
+    return true;
+  }
 };
 // --- FIN DEL PARCHE ---
 (function(){
