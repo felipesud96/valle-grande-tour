@@ -11,7 +11,7 @@
   --chalk: #F4F0E2;
   --ball: #D4AF37;
   --ink: #14120A;
-  --muted: #9A968A;
+  --muted: #ACA89D;
   --line: rgba(244,240,226,0.12);
 
   font-family: 'Work Sans', sans-serif;
@@ -21,6 +21,7 @@
   border-radius: 14px;
   overflow: hidden;
   position: relative;
+  font-size: var(--ace-text-scale, 100%);
 }
 
 #ace-app * { box-sizing: border-box; }
@@ -290,10 +291,25 @@
 #ace-app .tier-opt .tname { font-weight: 700; font-size: 12.5px; }
 #ace-app .tier-opt .tinfo { font-size: 10.5px; color: var(--muted); }
 #ace-app .close-x { position:absolute; top:16px; right:16px; background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;}
+#ace-app .btn-spinner {
+  display:inline-block; width:11px; height:11px; border-radius:50%;
+  border: 2px solid rgba(255,255,255,0.4); border-top-color: currentColor;
+  animation: aceSpin 0.7s linear infinite; vertical-align:middle;
+}
+@keyframes aceSpin { to { transform: rotate(360deg); } }
+#ace-app .btn:disabled { opacity:0.7; cursor:default; }
 
 @media (max-width: 560px) {
   #ace-app .rank-row { grid-template-columns: 34px 40px 1fr auto; padding: 8px 10px; gap: 10px; }
   #ace-app .section-head h2 { font-size: 22px; }
+  #ace-app .tabs {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 500;
+    background: var(--court-2); border-top: 1px solid var(--line); border-bottom: none;
+    justify-content: space-around; padding: 0 2px; max-width: none;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+  }
+  #ace-app .tab { font-size: 10.5px; padding: 10px 4px 8px; flex: 1; text-align: center; white-space: normal; }
+  #ace-app .wrap { padding-bottom: 76px; }
 }
 </style>
 
@@ -361,6 +377,7 @@
       </div>
       <div id="identity-chip"></div>
       <div id="admin-chip"></div>
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.toggleTextSize()" title="Cambiar tamaño de texto" aria-label="Cambiar tamaño de texto">🔤 Tamaño de texto</button>
       <input type="file" id="restore-file-input" accept="application/json" style="display:none;" onchange="AceApp.handleRestoreFile(event)">
     </div>
   </div>
@@ -385,12 +402,12 @@
 // 3) Compilación -> Authentication -> Sign-in method -> habilita "Anonymous"
 // 4) Configuración del proyecto (rueda dentada) -> tus apps -> agregar app Web -> copia el firebaseConfig y pégalo abajo
 const firebaseConfig = {
-  apiKey: "AIzaSyD8hxiy9-fVFQJbFrMGWG41OpMEHpxV0-0",
-  authDomain: "valle-grande-tour-v2.firebaseapp.com",
-  projectId: "valle-grande-tour-v2",
-  storageBucket: "valle-grande-tour-v2.firebasestorage.app",
-  messagingSenderId: "38246562691",
-  appId: "1:38246562691:web:891aebbee8288dbb3414b6"
+  apiKey: "AIzaSyA9hf0HNqqGGFK68nSVGMRtEjG3LE3Ut98",
+  authDomain: "valle-grande-tour.firebaseapp.com",
+  projectId: "valle-grande-tour",
+  storageBucket: "valle-grande-tour.firebasestorage.app",
+  messagingSenderId: "759880801343",
+  appId: "1:759880801343:web:26907f69c0a066766fac8a"
 };
 // --- FIN CONFIGURACIÓN FIREBASE ---
 
@@ -586,7 +603,7 @@ const SUGGESTED_ACHIEVEMENTS = [
   { e:'🌅', t:'Madrugador', d:'El que siempre llega primero a calentar.' },
 ];
 
-let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false };
+let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc' };
 let tempPhoto = null; // holds base64 during player modal session
 let tempLinkAsMe = false; // whether the player modal in progress should self-link on save
 
@@ -614,6 +631,10 @@ async function loadAll(){
   const tierFees = await safeGet('tier-fees', null);
   if(tierFees){
     TIERS.forEach(t=>{ if(tierFees[t.id]!=null) t.fee = tierFees[t.id]; });
+  }
+  const tierPoints = await safeGet('tier-points', null);
+  if(tierPoints){
+    TIERS.forEach(t=>{ if(tierPoints[t.id]) t.points = {...t.points, ...tierPoints[t.id]}; });
   }
   state.loaded = true;
 }
@@ -975,6 +996,67 @@ function render(){
 }
 
 // ---------- VIEW: RANKING ----------
+function rankingEvolutionSvg(){
+  const completed = [...state.tournaments].filter(t=>t.status==='completed').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(completed.length<2 || state.players.length===0) return '';
+
+  const cumulative = {};
+  state.players.forEach(p=> cumulative[p.id]=0);
+  const series = {};
+  state.players.forEach(p=> series[p.id]=[0]);
+
+  completed.forEach(t=>{
+    const tier = tierOf(t.tier);
+    if(!tier) return;
+    const assigned = new Set();
+    ['champion','finalist','semi','quarter'].forEach(role=>{
+      (t.results[role]||[]).forEach(pid=>{ cumulative[pid]=(cumulative[pid]||0)+tier.points[role]; assigned.add(pid); });
+    });
+    (t.participants||[]).forEach(pid=>{ if(!assigned.has(pid)) cumulative[pid]=(cumulative[pid]||0)+tier.points.r1; });
+    state.players.forEach(p=> series[p.id].push(cumulative[p.id]||0));
+  });
+
+  const topIds = state.players.map(p=>p.id)
+    .sort((a,b)=>(series[b][series[b].length-1]) - (series[a][series[a].length-1]))
+    .slice(0,5)
+    .filter(id => series[id][series[id].length-1] > 0);
+  if(topIds.length===0) return '';
+
+  const colors = ['#D4AF37','#B5502E','#4C7A5B','#D97A4F','#8C3D22'];
+  const steps = completed.length + 1;
+  const maxVal = Math.max(1, ...topIds.map(id => Math.max(...series[id])));
+  const W = 640, H = 220, padL = 34, padB = 24, padT = 12, padR = 12;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xAt = (i) => padL + (plotW * i) / (steps-1);
+  const yAt = (v) => padT + plotH - (plotH * v) / maxVal;
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padT + plotH * (1-f);
+    return `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(maxVal*f)}</text>`;
+  }).join('');
+
+  const lines = topIds.map((id,ci) => {
+    const pts = series[id].map((v,i)=> `${xAt(i)},${yAt(v)}`).join(' ');
+    const color = colors[ci % colors.length];
+    const lastX = xAt(series[id].length-1), lastY = yAt(series[id][series[id].length-1]);
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lastX}" cy="${lastY}" r="3.5" fill="${color}"/>`;
+  }).join('');
+
+  const legend = topIds.map((id,ci)=>{
+    const color = colors[ci % colors.length];
+    return `<span style="display:inline-flex;align-items:center;gap:5px;margin:3px 10px 3px 0;font-size:11.5px;color:var(--muted);">
+      <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block;"></span>${esc(playerName(id))}
+    </span>`;
+  }).join('');
+
+  return `<div class="card" style="margin-bottom:22px;">
+    <div class="tourn-meta" style="margin-bottom:8px;">📈 Evolución del ranking (top 5, por torneo completado)</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${gridLines}${lines}</svg>
+    <div style="margin-top:8px;">${legend}</div>
+  </div>`;
+}
 function viewRanking(){
   const list = singlesRankingList();
   if(state.players.length===0){
@@ -996,6 +1078,7 @@ function viewRanking(){
   }).join('');
   return `<div class="section-head"><h2>Ranking individual</h2><button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">🤝 Cara a cara</button></div>
   <div class="section-sub">Puntos acumulados en torneos de individuales completados.</div>
+  ${rankingEvolutionSvg()}
   <div class="rank-table">${rows}</div>`;
 }
 function playerMetaShort(p){
@@ -1012,7 +1095,19 @@ function viewTournaments(){
   if(state.tournaments.length===0){
     return head + `<div class="empty"><span class="disp">Aún no hay torneos</span>${state.isAdmin?'Crea el primero y define su categoría.':'El administrador todavía no crea ninguno.'}</div>`;
   }
-  const sorted = [...state.tournaments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const sortBar = `<div class="field" style="max-width:240px;margin-bottom:16px;">
+    <label>Ordenar por</label>
+    <select onchange="AceApp.setTournamentSort(this.value)">
+      <option value="date-desc" ${state.tournamentSort==='date-desc'?'selected':''}>Más recientes primero</option>
+      <option value="date-asc" ${state.tournamentSort==='date-asc'?'selected':''}>Más próximos primero</option>
+      <option value="name" ${state.tournamentSort==='name'?'selected':''}>Nombre (A-Z)</option>
+    </select>
+  </div>`;
+  const sorted = [...state.tournaments].sort((a,b)=>{
+    if(state.tournamentSort==='date-asc') return (a.date||'').localeCompare(b.date||'');
+    if(state.tournamentSort==='name') return a.name.localeCompare(b.name);
+    return (b.date||'').localeCompare(a.date||'');
+  });
   const cards = sorted.map(t=>{
     const tier = tierOf(t.tier);
     const isDone = t.status==='completed';
@@ -1045,7 +1140,7 @@ function viewTournaments(){
       </div>
     </div>`;
   }).join('');
-  return head + cards;
+  return head + sortBar + cards;
 }
 function podiumHtml(t, isDoubles){
   const nameOf = isDoubles ? (idx=> (t.pairs[idx]||[]).map(playerName).join(' / ')) : (pid=>playerName(pid));
@@ -1062,8 +1157,21 @@ function viewPlayers(){
   if(state.players.length===0){
     return head + `<div class="empty"><span class="disp">El circuito está vacío</span>Usa el botón "Identifícate o regístrate" arriba para agregar al primer jugador.</div>`;
   }
+  const searchBar = `<div class="field" style="max-width:320px;margin-bottom:16px;">
+    <input type="text" id="player-search-input" placeholder="🔎 Buscar jugador por nombre o alias..." value="${esc(state.playerSearch||'')}" oninput="AceApp.filterPlayers(this.value)">
+  </div>`;
+  return head + searchBar + `<div id="players-grid">${playersGridHtml()}</div>`;
+}
+function playersGridHtml(){
+  const term = (state.playerSearch||'').trim().toLowerCase();
+  const filtered = term
+    ? state.players.filter(p => p.name.toLowerCase().includes(term) || (p.alias||'').toLowerCase().includes(term))
+    : state.players;
+  if(filtered.length===0){
+    return `<div class="empty">Ningún jugador coincide con "${esc(state.playerSearch)}".</div>`;
+  }
   const ranking = singlesRankingList();
-  const cards = state.players.map(p=>{
+  const cards = filtered.map(p=>{
     const pos = ranking.findIndex(r=>r.id===p.id)+1;
     const titles = (titlesByPlayer(state.tournaments,false)[p.id]||0);
     const badges = autoBadges(p.id).map(b=>`<span class="badge-emoji" title="${b.t}">${b.e}</span>`).join('');
@@ -1091,8 +1199,14 @@ function viewPlayers(){
       </div>` : ''}
     </div>`;
   }).join('');
-  return head + `<div class="grid">${cards}</div>`;
+  return `<div class="grid">${cards}</div>`;
 }
+function filterPlayers(term){
+  state.playerSearch = term;
+  const el = document.getElementById('players-grid');
+  if(el) el.innerHTML = playersGridHtml();
+}
+function setTournamentSort(v){ state.tournamentSort = v; render(); }
 
 // ---------- VIEW: DOUBLES ----------
 function viewDoubles(){
@@ -1216,10 +1330,14 @@ function viewFinance(){
         const click = state.isAdmin ? ` onclick="AceApp.togglePaid('singles','${t.id}','${pid}')"` : ' style="cursor:default;"';
         return `<span class="pay-chip ${isPaid?'paid':'pending'}"${click}>${isPaid?'✅':'🎫'} ${esc(playerName(pid))} ${isPaid?'· pagado':'· '+fmtMoney(tier.fee)}</span>`;
       }).join('');
+      const allPaid = t.participants.every(pid=>(t.paid||[]).includes(pid));
       return `<div class="card" style="margin-bottom:10px;">
         <div class="tourn-title" style="font-size:18px;">${esc(t.name)} <span class="tier-badge" style="background:${tier.color};font-size:9px;vertical-align:middle;">${tier.short}</span></div>
         <div class="tourn-meta" style="margin-bottom:8px;">Cuota: ${fmtMoney(tier.fee)} por jugador${state.isAdmin?' · toca un nombre para marcar como pagado':''}</div>
         <div>${chips}</div>
+        ${state.isAdmin ? `<div style="margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="AceApp.markAllPaid('singles','${t.id}', ${!allPaid})">${allPaid?'↺ Desmarcar todos':'✅ Marcar todos como pagados'}</button>
+        </div>` : ''}
       </div>`;
     }).join('');
 
@@ -1238,10 +1356,14 @@ function viewFinance(){
         const click = state.isAdmin ? ` onclick="AceApp.togglePaid('doubles','${t.id}','${idx}')"` : ' style="cursor:default;"';
         return `<span class="pay-chip ${isPaid?'paid':'pending'}"${click}>${isPaid?'✅':'🎫'} ${pair.map(playerName).join(' / ')} ${isPaid?'· pagado':'· '+fmtMoney(tier.fee)}</span>`;
       }).join('');
+      const allPaid = t.pairs.every((pair,idx)=>(t.paid||[]).includes(String(idx)));
       return `<div class="card" style="margin-bottom:10px;">
         <div class="tourn-title" style="font-size:18px;">${esc(t.name)} <span class="tier-badge" style="background:${tier.color};font-size:9px;vertical-align:middle;">${tier.short}</span></div>
         <div class="tourn-meta" style="margin-bottom:8px;">Cuota: ${fmtMoney(tier.fee)} por pareja${state.isAdmin?' · toca una pareja para marcarla como pagada':''}</div>
         <div>${chips}</div>
+        ${state.isAdmin ? `<div style="margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="AceApp.markAllPaid('doubles','${t.id}', ${!allPaid})">${allPaid?'↺ Desmarcar todos':'✅ Marcar todos como pagados'}</button>
+        </div>` : ''}
       </div>`;
     }).join('');
 
@@ -1344,7 +1466,16 @@ function openModal(html){
   overlay.id = 'ace-overlay';
   overlay.innerHTML = `<div class="modal">${html}</div>`;
   overlay.addEventListener('click', e=>{ if(e.target===overlay) closeModal(); });
+  overlay.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ closeModal(); return; }
+    if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){
+      const primary = overlay.querySelector('.modal-actions .btn-primary, .modal-actions .btn-danger');
+      if(primary){ e.preventDefault(); primary.click(); }
+    }
+  });
   document.getElementById('ace-app').appendChild(overlay);
+  const firstField = overlay.querySelector('input[type=text], input[type=number], input[type=date], textarea, select');
+  if(firstField) setTimeout(()=> firstField.focus(), 50);
 }
 function aceAlert(message){
   const existing = document.getElementById('ace-toast');
@@ -1355,6 +1486,18 @@ function aceAlert(message){
   toast.textContent = message;
   document.getElementById('ace-app').appendChild(toast);
   setTimeout(()=>{ if(toast.parentNode) toast.remove(); }, 4200);
+}
+async function withLoading(btn, label, fn){
+  if(!btn){ return fn(); }
+  const original = btn.innerHTML;
+  const wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="btn-spinner"></span> ${label}`;
+  try {
+    return await fn();
+  } finally {
+    if(btn.isConnected){ btn.disabled = wasDisabled; btn.innerHTML = original; }
+  }
 }
 function confirmDialog(message){
   return new Promise(resolve=>{
@@ -1497,18 +1640,22 @@ async function handleRestoreFile(ev){
 // ---- settings: match rules & tier fees ----
 function openSettingsModal(){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cambiar las reglas y cuotas.'); return; }
+  const roleLabels = [['champion','Campeón'],['finalist','Finalista'],['semi','Semifinal'],['quarter','Cuartos'],['r1','1ª ronda']];
   const tierRows = TIERS.map(t=>`
-    <div class="field-row" style="align-items:flex-end;">
-      <div class="field" style="flex:2;">
-        <label>${esc(t.label)}</label>
-        <div class="tourn-meta">${t.points.champion} pts al campeón</div>
+    <div class="card" style="margin-bottom:10px;">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field" style="flex:2;"><label>${esc(t.label)}</label></div>
+        <div class="field"><label>Cuota</label><input type="number" min="0" step="500" id="s-fee-${t.id}" value="${t.fee}"></div>
       </div>
-      <div class="field"><label>Cuota</label><input type="number" min="0" step="500" id="s-fee-${t.id}" value="${t.fee}"></div>
+      <div class="tourn-meta" style="margin:6px 0 4px;">Puntos por ronda alcanzada</div>
+      <div class="field-row" style="flex-wrap:wrap;gap:8px;">
+        ${roleLabels.map(([role,label])=>`<div class="field" style="min-width:70px;flex:1;"><label>${label}</label><input type="number" min="0" id="s-pts-${t.id}-${role}" value="${t.points[role]}"></div>`).join('')}
+      </div>
     </div>`).join('');
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Reglas y cuotas</h2>
-    <div class="section-sub">Esto aplica a los torneos que crees de aquí en adelante (los ya creados mantienen su cuota original).</div>
+    <div class="section-sub">Esto aplica a los torneos que crees de aquí en adelante (los ya creados mantienen su cuota y puntos originales).</div>
     <div class="field">
       <label>Modalidad de partido</label>
       <select id="s-format">
@@ -1517,30 +1664,43 @@ function openSettingsModal(){
       </select>
     </div>
     <div class="field"><label>Games para ganar un set</label><input type="number" min="1" max="9" id="s-games" value="${state.matchRules.gamesPerSet}"></div>
-    <h3 style="font-size:16px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Cuotas por categoría</h3>
+    <h3 style="font-size:16px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Cuotas y puntos por categoría</h3>
     ${tierRows}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveSettings()">Guardar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveSettings(this)">Guardar</button>
     </div>`;
   openModal(html);
 }
-async function saveSettings(){
+async function saveSettings(btn){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cambiar las reglas y cuotas.'); return; }
   const format = document.getElementById('s-format').value;
   const gamesPerSet = Math.max(1, Number(document.getElementById('s-games').value) || 3);
-  state.matchRules = { format, gamesPerSet };
-  await save('match-rules', state.matchRules, true);
+  await withLoading(btn, 'Guardando...', async () => {
+    state.matchRules = { format, gamesPerSet };
+    await save('match-rules', state.matchRules, true);
 
-  const tierFees = {};
-  TIERS.forEach(t=>{
-    const val = Number(document.getElementById('s-fee-'+t.id).value);
-    t.fee = isNaN(val) || val<0 ? t.fee : val;
-    tierFees[t.id] = t.fee;
+    const tierFees = {};
+    const tierPoints = {};
+    TIERS.forEach(t=>{
+      const val = Number(document.getElementById('s-fee-'+t.id).value);
+      t.fee = isNaN(val) || val<0 ? t.fee : val;
+      tierFees[t.id] = t.fee;
+
+      const pts = {};
+      ['champion','finalist','semi','quarter','r1'].forEach(role=>{
+        const pval = Number(document.getElementById(`s-pts-${t.id}-${role}`).value);
+        pts[role] = isNaN(pval) || pval<0 ? t.points[role] : pval;
+      });
+      t.points = pts;
+      tierPoints[t.id] = pts;
+    });
+    await save('tier-fees', tierFees, true);
+    await save('tier-points', tierPoints, true);
+
+    closeModal(); render();
   });
-  await save('tier-fees', tierFees, true);
-
-  closeModal(); render();
+  aceAlert('✅ Reglas y cuotas guardadas');
 }
 
 function openMatchModal(tid, isDoubles){
@@ -1579,7 +1739,7 @@ function openMatchModal(tid, isDoubles){
     ${isBestOf3 ? setRow(2) + setRow(3) : ''}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveMatch('${t.id}', ${isDoubles})">Guardar partido</button>
+      <button class="btn btn-primary" onclick="AceApp.saveMatch(this, '${t.id}', ${isDoubles})">Guardar partido</button>
     </div>` : `<div class="modal-actions"><button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button></div>`;
 
   const html = `
@@ -1590,7 +1750,7 @@ function openMatchModal(tid, isDoubles){
     ${addForm}`;
   openModal(html);
 }
-async function saveMatch(tid, isDoubles){
+async function saveMatch(btn, tid, isDoubles){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cargar marcadores.'); return; }
   const list = isDoubles ? state.doubles : state.tournaments;
   const t = list.find(x=>x.id===tid);
@@ -1613,11 +1773,14 @@ async function saveMatch(tid, isDoubles){
     : [readSet('m-s1a','m-s1b')]
   ).filter(s=>s!==null);
   if(sets.length===0){ aceAlert('Carga el marcador del partido.'); return; }
-  t.matches = t.matches || [];
-  t.matches.push({ id: uid(), sideA: compA.players, sideB: compB.players, sets });
-  await save(isDoubles?'doubles':'tournaments', list);
-  render();
-  openMatchModal(tid, isDoubles);
+  await withLoading(btn, 'Guardando...', async () => {
+    t.matches = t.matches || [];
+    t.matches.push({ id: uid(), sideA: compA.players, sideB: compB.players, sets });
+    await save(isDoubles?'doubles':'tournaments', list);
+    render();
+    openMatchModal(tid, isDoubles);
+  });
+  aceAlert('✅ Partido guardado');
 }
 async function deleteMatch(tid, matchId, isDoubles){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede eliminar partidos.'); return; }
@@ -1698,6 +1861,7 @@ function openPlayerModal(id, linkAsMe){
         <div id="photo-preview">${editing?playerAvatarHtml(editing,64):'<div class="avatar" style="width:64px;height:64px">?</div>'}</div>
         <input type="file" accept="image/*" onchange="AceApp.handlePhoto(event)">
       </div>
+      <div id="photo-crop-wrap"></div>
     </div>
     <div class="field"><label>Nombre</label><input type="text" id="f-name" value="${editing?esc(editing.name):''}" placeholder="Nombre completo"></div>
     <div class="field"><label>Alias</label><input type="text" id="f-alias" value="${editing?esc(editing.alias||''):''}" placeholder="Ej: El Muro, La Máquina, Zurdazo..."></div>
@@ -1721,32 +1885,101 @@ function openPlayerModal(id, linkAsMe){
     <div class="field"><label>Títulos previos (antes del circuito)</label><input type="text" id="f-prior" value="${editing?esc(editing.priorTitles||''):''}" placeholder="Ej: Campeón torneo del club 2022"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.savePlayer(${editing?`'${id}'`:'null'})">Guardar</button>
+      <button class="btn btn-primary" onclick="AceApp.savePlayer(this, ${editing?`'${id}'`:'null'})">Guardar</button>
     </div>`;
   openModal(html);
 }
+let cropState = null;
 function handlePhoto(ev){
   const file = ev.target.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = function(e){
     const img = new Image();
-    img.onload = function(){
-      const maxDim = 260;
-      let w = img.width, h = img.height;
-      if(w>h){ if(w>maxDim){ h = h*maxDim/w; w = maxDim; } }
-      else { if(h>maxDim){ w = w*maxDim/h; h = maxDim; } }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      tempPhoto = canvas.toDataURL('image/jpeg', 0.82);
-      document.getElementById('photo-preview').innerHTML = `<img class="avatar" style="width:64px;height:64px" src="${tempPhoto}">`;
-    };
+    img.onload = function(){ openCropUI(img); };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
-async function savePlayer(id){
+function openCropUI(img){
+  const stage = 220;
+  const baseScale = Math.max(stage/img.width, stage/img.height);
+  const displayW = img.width*baseScale, displayH = img.height*baseScale;
+  cropState = { img, stage, baseScale, zoom: 1, x: (stage-displayW)/2, y: (stage-displayH)/2 };
+  const wrap = document.getElementById('photo-crop-wrap');
+  wrap.innerHTML = `
+    <div class="section-sub" style="margin:8px 0 6px;">Arrastra para mover, usa la barra para acercar/alejar.</div>
+    <div id="crop-stage" style="width:${stage}px;height:${stage}px;border-radius:50%;overflow:hidden;position:relative;background:var(--court);cursor:grab;touch-action:none;border:2px solid var(--ball);">
+      <img id="crop-img" src="${img.src}" style="position:absolute;left:${cropState.x}px;top:${cropState.y}px;width:${displayW}px;height:${displayH}px;max-width:none;user-select:none;">
+    </div>
+    <input type="range" id="crop-zoom" min="1" max="3" step="0.05" value="1" style="width:${stage}px;margin-top:8px;" oninput="AceApp.onCropZoom(this.value)">
+    <div><button type="button" class="btn btn-ball btn-sm" style="margin-top:8px;" onclick="AceApp.applyCrop()">✅ Usar esta foto</button></div>`;
+  setupCropDrag();
+}
+function clampCrop(){
+  const displayW = cropState.img.width*cropState.baseScale*cropState.zoom;
+  const displayH = cropState.img.height*cropState.baseScale*cropState.zoom;
+  const minX = cropState.stage - displayW, minY = cropState.stage - displayH;
+  cropState.x = Math.max(minX, Math.min(0, cropState.x));
+  cropState.y = Math.max(minY, Math.min(0, cropState.y));
+}
+function setupCropDrag(){
+  const stageEl = document.getElementById('crop-stage');
+  const imgEl = document.getElementById('crop-img');
+  if(!stageEl || !imgEl) return;
+  let dragging=false, startPX=0, startPY=0, startX=0, startY=0;
+  const getXY = (e)=> e.touches ? e.touches[0] : e;
+  const onDown = (e)=>{
+    dragging = true;
+    const p = getXY(e);
+    startPX=p.clientX; startPY=p.clientY; startX=cropState.x; startY=cropState.y;
+    stageEl.style.cursor = 'grabbing';
+  };
+  const onMove = (e)=>{
+    if(!dragging || !cropState || !document.body.contains(stageEl)) return;
+    const p = getXY(e);
+    cropState.x = startX + (p.clientX-startPX);
+    cropState.y = startY + (p.clientY-startPY);
+    clampCrop();
+    imgEl.style.left = cropState.x+'px';
+    imgEl.style.top = cropState.y+'px';
+    if(e.cancelable) e.preventDefault();
+  };
+  const onUp = ()=>{ dragging=false; if(stageEl.isConnected) stageEl.style.cursor='grab'; };
+  stageEl.addEventListener('mousedown', onDown);
+  stageEl.addEventListener('touchstart', onDown, {passive:true});
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('touchmove', onMove, {passive:false});
+  window.addEventListener('mouseup', onUp);
+  window.addEventListener('touchend', onUp);
+}
+function onCropZoom(val){
+  if(!cropState) return;
+  cropState.zoom = Number(val);
+  clampCrop();
+  const imgEl = document.getElementById('crop-img');
+  if(imgEl){
+    imgEl.style.width = (cropState.img.width*cropState.baseScale*cropState.zoom)+'px';
+    imgEl.style.height = (cropState.img.height*cropState.baseScale*cropState.zoom)+'px';
+    imgEl.style.left = cropState.x+'px';
+    imgEl.style.top = cropState.y+'px';
+  }
+}
+function applyCrop(){
+  if(!cropState) return;
+  const { img, stage, baseScale, zoom, x, y } = cropState;
+  const displayScale = baseScale*zoom;
+  const sourceSize = stage/displayScale;
+  const sourceX = -x/displayScale, sourceY = -y/displayScale;
+  const canvas = document.createElement('canvas');
+  canvas.width = 260; canvas.height = 260;
+  canvas.getContext('2d').drawImage(img, sourceX, sourceY, sourceSize, sourceSize, 0, 0, 260, 260);
+  tempPhoto = canvas.toDataURL('image/jpeg', 0.85);
+  document.getElementById('photo-preview').innerHTML = `<img class="avatar" style="width:64px;height:64px" src="${tempPhoto}">`;
+  document.getElementById('photo-crop-wrap').innerHTML = '';
+  cropState = null;
+}
+async function savePlayer(btn, id){
   const canSave = state.isAdmin || tempLinkAsMe || (id && id===state.myPlayerId);
   if(!canSave){ aceAlert('Solo puedes editar tu propio perfil, o pídele al administrador que lo haga.'); return; }
   const name = document.getElementById('f-name').value.trim();
@@ -1761,28 +1994,33 @@ async function savePlayer(id){
     priorTitles: document.getElementById('f-prior').value.trim(),
     photo: tempPhoto || null,
   };
-  try {
-    let targetId = id;
-    if(id){
-      const p = playerById(id);
-      Object.assign(p, data);
-    } else {
-      targetId = uid();
-      state.players.push(Object.assign({id: targetId}, data));
+  let ok = true;
+  await withLoading(btn, 'Guardando...', async () => {
+    try {
+      let targetId = id;
+      if(id){
+        const p = playerById(id);
+        Object.assign(p, data);
+      } else {
+        targetId = uid();
+        state.players.push(Object.assign({id: targetId}, data));
+      }
+      await save('players', state.players);
+      if(!id && tempLinkAsMe){
+        state.myPlayerId = targetId;
+        await save('my-player-id', targetId, false);
+      }
+    } catch(err){
+      ok = false;
+      console.error('Error en savePlayer', err);
+      aceAlert('Hubo un problema guardando el jugador: ' + (err && err.message ? err.message : err));
+    } finally {
+      tempLinkAsMe = false;
+      closeModal();
+      render();
     }
-    await save('players', state.players);
-    if(!id && tempLinkAsMe){
-      state.myPlayerId = targetId;
-      await save('my-player-id', targetId, false);
-    }
-  } catch(err){
-    console.error('Error en savePlayer', err);
-    aceAlert('Hubo un problema guardando el jugador: ' + (err && err.message ? err.message : err));
-  } finally {
-    tempLinkAsMe = false;
-    closeModal();
-    render();
-  }
+  });
+  if(ok) aceAlert('✅ Jugador guardado');
 }
 async function deletePlayer(id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede eliminar jugadores.'); return; }
@@ -1814,22 +2052,25 @@ function openTournamentModal(id){
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveTournament(${editing?`'${id}'`:'null'})">Guardar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveTournament(this, ${editing?`'${id}'`:'null'})">Guardar</button>
     </div>`;
   openModal(html);
 }
-async function saveTournament(id){
+async function saveTournament(btn, id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede crear o editar torneos.'); return; }
   const name = document.getElementById('f-tname').value.trim();
   if(!name){ aceAlert('Ponle un nombre al torneo.'); return; }
   const data = { name, date: document.getElementById('f-tdate').value, tier: document.getElementById('f-tier').value };
-  if(id){
-    Object.assign(state.tournaments.find(t=>t.id===id), data);
-  } else {
-    state.tournaments.push({ id: uid(), participants: [], paid: [], matches: [], status:'open', results:{champion:[],finalist:[],semi:[],quarter:[]}, ...data });
-  }
-  await save('tournaments', state.tournaments);
-  closeModal(); render();
+  await withLoading(btn, 'Guardando...', async () => {
+    if(id){
+      Object.assign(state.tournaments.find(t=>t.id===id), data);
+    } else {
+      state.tournaments.push({ id: uid(), participants: [], paid: [], matches: [], status:'open', results:{champion:[],finalist:[],semi:[],quarter:[]}, ...data });
+    }
+    await save('tournaments', state.tournaments);
+    closeModal(); render();
+  });
+  aceAlert('✅ Torneo guardado');
 }
 async function drawBracket(tid, isDoubles){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede sortear el cuadro.'); return; }
@@ -1893,23 +2134,26 @@ function openResultsModal(tid){
     <div class="field"><label>Cuartos de final</label><div class="check-list">${multiCheck('quarter')}</div></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveResults('${tid}')">Finalizar torneo</button>
+      <button class="btn btn-primary" onclick="AceApp.saveResults(this, '${tid}')">Finalizar torneo</button>
     </div>`;
   openModal(html);
   document.getElementById('r-champion').value = (t.results.champion||[])[0] || '';
   document.getElementById('r-finalist').value = (t.results.finalist||[])[0] || '';
 }
-async function saveResults(tid){
+async function saveResults(btn, tid){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cargar resultados.'); return; }
   const t = state.tournaments.find(x=>x.id===tid);
   const champion = document.getElementById('r-champion').value;
   const finalist = document.getElementById('r-finalist').value;
   const semi = Array.from(document.querySelectorAll('#ace-overlay input[data-role="semi"]:checked')).map(i=>i.value);
   const quarter = Array.from(document.querySelectorAll('#ace-overlay input[data-role="quarter"]:checked')).map(i=>i.value);
-  t.results = { champion: champion?[champion]:[], finalist: finalist?[finalist]:[], semi, quarter };
-  t.status = 'completed';
-  await save('tournaments', state.tournaments);
-  closeModal(); render();
+  await withLoading(btn, 'Guardando...', async () => {
+    t.results = { champion: champion?[champion]:[], finalist: finalist?[finalist]:[], semi, quarter };
+    t.status = 'completed';
+    await save('tournaments', state.tournaments);
+    closeModal(); render();
+  });
+  aceAlert('✅ Resultados guardados');
 }
 
 // ---- doubles modals ----
@@ -1923,22 +2167,25 @@ function openDoublesModal(id){
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveDoublesTournament(${editing?`'${id}'`:'null'})">Guardar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveDoublesTournament(this, ${editing?`'${id}'`:'null'})">Guardar</button>
     </div>`;
   openModal(html);
 }
-async function saveDoublesTournament(id){
+async function saveDoublesTournament(btn, id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede crear o editar torneos de dobles.'); return; }
   const name = document.getElementById('f-dname').value.trim();
   if(!name){ aceAlert('Ponle un nombre al torneo.'); return; }
   const data = { name, date: document.getElementById('f-ddate').value, tier: document.getElementById('f-tier').value };
-  if(id){
-    Object.assign(state.doubles.find(t=>t.id===id), data);
-  } else {
-    state.doubles.push({ id: uid(), pairs: [], paid: [], matches: [], status:'open', results:{champion:[],finalist:[],semi:[],quarter:[]}, ...data });
-  }
-  await save('doubles', state.doubles);
-  closeModal(); render();
+  await withLoading(btn, 'Guardando...', async () => {
+    if(id){
+      Object.assign(state.doubles.find(t=>t.id===id), data);
+    } else {
+      state.doubles.push({ id: uid(), pairs: [], paid: [], matches: [], status:'open', results:{champion:[],finalist:[],semi:[],quarter:[]}, ...data });
+    }
+    await save('doubles', state.doubles);
+    closeModal(); render();
+  });
+  aceAlert('✅ Torneo de dobles guardado');
 }
 async function deleteDoubles(id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede eliminar torneos de dobles.'); return; }
@@ -2006,23 +2253,26 @@ function openDoublesResultsModal(tid){
     <div class="field"><label>Cuartos de final</label><div class="check-list">${multiCheck('quarter')}</div></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveDoublesResults('${tid}')">Finalizar torneo</button>
+      <button class="btn btn-primary" onclick="AceApp.saveDoublesResults(this, '${tid}')">Finalizar torneo</button>
     </div>`;
   openModal(html);
   document.getElementById('dr-champion').value = (t.results.champion||[])[0] ?? '';
   document.getElementById('dr-finalist').value = (t.results.finalist||[])[0] ?? '';
 }
-async function saveDoublesResults(tid){
+async function saveDoublesResults(btn, tid){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cargar resultados.'); return; }
   const t = state.doubles.find(x=>x.id===tid);
   const champion = document.getElementById('dr-champion').value;
   const finalist = document.getElementById('dr-finalist').value;
   const semi = Array.from(document.querySelectorAll('#ace-overlay input[data-role="semi"]:checked')).map(i=>parseInt(i.value));
   const quarter = Array.from(document.querySelectorAll('#ace-overlay input[data-role="quarter"]:checked')).map(i=>parseInt(i.value));
-  t.results = { champion: champion!==''?[parseInt(champion)]:[], finalist: finalist!==''?[parseInt(finalist)]:[], semi, quarter };
-  t.status = 'completed';
-  await save('doubles', state.doubles);
-  closeModal(); render();
+  await withLoading(btn, 'Guardando...', async () => {
+    t.results = { champion: champion!==''?[parseInt(champion)]:[], finalist: finalist!==''?[parseInt(finalist)]:[], semi, quarter };
+    t.status = 'completed';
+    await save('doubles', state.doubles);
+    closeModal(); render();
+  });
+  aceAlert('✅ Resultados guardados');
 }
 
 // ---- achievement modal ----
@@ -2047,7 +2297,7 @@ function openAchievementModal(){
     <div class="field"><label>Descripción (opcional)</label><input type="text" id="a-desc" placeholder="Por qué se lo ganó"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveAchievement()">Guardar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveAchievement(this)">Guardar</button>
     </div>`;
   openModal(html);
 }
@@ -2058,20 +2308,23 @@ function pickSuggested(i){
   document.getElementById('a-title').value = s.t;
   document.getElementById('a-desc').value = s.d;
 }
-async function saveAchievement(){
+async function saveAchievement(btn){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede agregar logros.'); return; }
   const title = document.getElementById('a-title').value.trim();
   if(!title){ aceAlert('Ponle un título al logro.'); return; }
-  state.achievements.push({
-    id: uid(),
-    playerId: document.getElementById('a-player').value,
-    emoji: document.getElementById('a-emoji').value.trim() || '🎖️',
-    title,
-    desc: document.getElementById('a-desc').value.trim(),
-    date: new Date().toISOString().slice(0,10),
+  await withLoading(btn, 'Guardando...', async () => {
+    state.achievements.push({
+      id: uid(),
+      playerId: document.getElementById('a-player').value,
+      emoji: document.getElementById('a-emoji').value.trim() || '🎖️',
+      title,
+      desc: document.getElementById('a-desc').value.trim(),
+      date: new Date().toISOString().slice(0,10),
+    });
+    await save('achievements', state.achievements);
+    closeModal(); render();
   });
-  await save('achievements', state.achievements);
-  closeModal(); render();
+  aceAlert('✅ Logro agregado');
 }
 async function deleteAchievement(id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede eliminar logros.'); return; }
@@ -2098,6 +2351,20 @@ async function togglePaid(kind, tid, itemId){
   }
   render();
 }
+async function markAllPaid(kind, tid, markAsPaid){
+  if(!state.isAdmin){ aceAlert('Solo el administrador puede marcar cuotas como pagadas.'); return; }
+  if(kind==='singles'){
+    const t = state.tournaments.find(x=>x.id===tid);
+    t.paid = markAsPaid ? [...t.participants] : [];
+    await save('tournaments', state.tournaments);
+  } else {
+    const t = state.doubles.find(x=>x.id===tid);
+    t.paid = markAsPaid ? t.pairs.map((_,idx)=>String(idx)) : [];
+    await save('doubles', state.doubles);
+  }
+  render();
+  aceAlert(markAsPaid ? '✅ Todos marcados como pagados' : '↺ Todos desmarcados');
+}
 
 function openExpenseModal(){
   const html = `
@@ -2117,25 +2384,28 @@ function openExpenseModal(){
     <div class="field"><label>Fecha</label><input type="date" id="e-date" value="${new Date().toISOString().slice(0,10)}"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="AceApp.saveExpense()">Guardar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveExpense(this)">Guardar</button>
     </div>`;
   openModal(html);
 }
-async function saveExpense(){
+async function saveExpense(btn){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede registrar gastos.'); return; }
   const concept = document.getElementById('e-concept').value.trim();
   const amount = Number(document.getElementById('e-amount').value);
   if(!concept){ aceAlert('Escribe en qué se gastó.'); return; }
   if(!amount || amount<=0){ aceAlert('Ingresa un monto válido.'); return; }
-  state.expenses.push({
-    id: uid(),
-    concept,
-    category: document.getElementById('e-category').value,
-    amount,
-    date: document.getElementById('e-date').value,
+  await withLoading(btn, 'Guardando...', async () => {
+    state.expenses.push({
+      id: uid(),
+      concept,
+      category: document.getElementById('e-category').value,
+      amount,
+      date: document.getElementById('e-date').value,
+    });
+    await save('expenses', state.expenses);
+    closeModal(); render();
   });
-  await save('expenses', state.expenses);
-  closeModal(); render();
+  aceAlert('✅ Gasto registrado');
 }
 async function deleteExpense(id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede eliminar gastos.'); return; }
@@ -2146,6 +2416,12 @@ async function deleteExpense(id){
 }
 
 function setTab(tab){ state.tab = tab; render(); }
+function toggleTextSize(){
+  const app = document.getElementById('ace-app');
+  const current = app.style.getPropertyValue('--ace-text-scale') || '100%';
+  const next = current === '100%' ? '115%' : (current === '115%' ? '130%' : '100%');
+  app.style.setProperty('--ace-text-scale', next);
+}
 
 window.AceApp = {
   setTab, openPlayerModal, savePlayer, deletePlayer, handlePhoto, closeModal,
@@ -2159,18 +2435,23 @@ window.AceApp = {
   openDoublesModal, saveDoublesTournament, deleteDoubles, openPairsModal, addPairRow, savePairs,
   openDoublesResultsModal, saveDoublesResults,
   openAchievementModal, saveAchievement, deleteAchievement, pickSuggested,
-  togglePaid, openExpenseModal, saveExpense, deleteExpense,
+  togglePaid, markAllPaid, openExpenseModal, saveExpense, deleteExpense, bootApp,
+  filterPlayers, setTournamentSort, onCropZoom, applyCrop, toggleTextSize,
 };
 
 // ---------- INIT ----------
-document.getElementById('section-content').innerHTML = '<div class="empty">Cargando circuito…</div>';
-seedIfEmpty().then(() => loadAll()).then(render).catch(err => {
-  console.error('Error al iniciar el circuito:', err);
-  document.getElementById('section-content').innerHTML =
-    '<div class="empty"><span class="disp">No se pudo conectar</span>' +
-    'Revisa la configuración de Firebase (apiKey, reglas de Firestore, Authentication anónimo).<br><br>' +
-    '<span style="color:var(--clay-light);font-family:monospace;font-size:11px;">' + (err && err.message ? err.message : String(err)) + '</span></div>';
-});
+function bootApp(){
+  document.getElementById('section-content').innerHTML = '<div class="empty">Cargando circuito…</div>';
+  seedIfEmpty().then(() => loadAll()).then(render).catch(err => {
+    console.error('Error al iniciar el circuito:', err);
+    document.getElementById('section-content').innerHTML =
+      '<div class="empty"><span class="disp">No se pudo conectar</span>' +
+      'Revisa la configuración de Firebase (apiKey, reglas de Firestore, Authentication anónimo).<br><br>' +
+      '<span style="color:var(--clay-light);font-family:monospace;font-size:11px;display:block;margin-bottom:14px;">' + (err && err.message ? err.message : String(err)) + '</span>' +
+      '<button class="btn btn-ball btn-sm" onclick="AceApp.bootApp()">🔄 Reintentar</button></div>';
+  });
+}
+bootApp();
 
 })();
 </script>
