@@ -484,15 +484,41 @@ async function withRetry(fn, retries = 4, delayMs = 1500) {
   throw lastErr;
 }
 
+// Firestore no permite arrays que contengan otros arrays (p.ej. marcadores de
+// set guardados como [[6,4],[3,6]]). Estas funciones "envuelven" cada array
+// interno en un objeto marcador antes de guardar, y lo "desenvuelven" al leer,
+// de forma totalmente transparente para el resto de la app.
+function encodeForFirestore(value){
+  if(Array.isArray(value)){
+    return value.map(el => Array.isArray(el) ? { __tuple:true, v: encodeForFirestore(el) } : encodeForFirestore(el));
+  } else if(value && typeof value === 'object'){
+    const out = {};
+    for(const k in value) out[k] = encodeForFirestore(value[k]);
+    return out;
+  }
+  return value;
+}
+function decodeFromFirestore(value){
+  if(Array.isArray(value)){
+    return value.map(decodeFromFirestore);
+  } else if(value && typeof value === 'object'){
+    if(value.__tuple === true && Array.isArray(value.v)) return decodeFromFirestore(value.v);
+    const out = {};
+    for(const k in value) out[k] = decodeFromFirestore(value[k]);
+    return out;
+  }
+  return value;
+}
+
 window.storage = {
   get: async function (key, shared) {
     await authReady;
     const snap = await withRetry(() => refFor(key, shared).get());
-    return snap.exists ? { value: JSON.stringify(snap.data().value) } : null;
+    return snap.exists ? { value: JSON.stringify(decodeFromFirestore(snap.data().value)) } : null;
   },
   set: async function (key, value, shared) {
     await authReady;
-    await withRetry(() => refFor(key, shared).set({ value: JSON.parse(value) }));
+    await withRetry(() => refFor(key, shared).set({ value: encodeForFirestore(JSON.parse(value)) }));
     return true;
   },
   delete: async function (key, shared) {
@@ -701,12 +727,12 @@ async function safeGet(key, fallback, shared=true){
 async function save(key, value, shared=true){
   try { 
     await window.storage.set(key, JSON.stringify(value), shared); 
+    return true;
   }
   catch(e){ 
     console.warn('Advertencia al guardar', key, e); 
-    if(e && e.code === 'permission-denied') {
-        aceAlert('No se pudo guardar. Permisos insuficientes.'); 
-    }
+    aceAlert('⚠️ No se pudo guardar en la nube: ' + (e && e.message ? e.message : 'error desconocido') + '. Revisa tu conexión y vuelve a intentar.');
+    return false;
   }
 }
 
@@ -1219,7 +1245,7 @@ function viewRanking(){
   <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres.</div>
   ${rankingEvolutionSvg()}
   <div class="rank-table">${rows}</div>
-  ${casualMatchesListHtml()}`;
+  ${casualMatchesListHtml('singles')}`;
 }
 function playerMetaShort(p){
   const bits = [];
@@ -1389,7 +1415,8 @@ function viewDoubles(){
     }).join('');
 
   return `<div class="section-head"><h2>Ranking de dobles</h2></div><div class="rank-table" style="margin-bottom:30px;">${rankHtml}</div>
-  ${head}${tournHtml}`;
+  ${head}${tournHtml}
+  ${casualMatchesListHtml('doubles')}`;
 }
 
 // ---------- VIEW: ACHIEVEMENTS ----------
@@ -2025,52 +2052,44 @@ async function saveCasualMatch(btn) {
     sets: [[Number(gA), Number(gB)]]
   };
 
+  let ok = false;
   await withLoading(btn, 'Guardando...', async () => {
     state.casualMatches = state.casualMatches || [];
     state.casualMatches.push(matchData);
-    await save('casualMatches', state.casualMatches);
-    closeModal();
-    render();
+    ok = await save('casualMatches', state.casualMatches);
+    if(ok){ closeModal(); render(); } else { state.casualMatches.pop(); }
   });
-  aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!');
+  if(ok) aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!');
 }
-  function casualMatchesListHtml(){
-  const matches = state.casualMatches || [];
+  function casualMatchesRowHtml(m){
+  const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
+  const labelA = m.sideA.map(playerName).join(' / ');
+  const labelB = m.sideB.map(playerName).join(' / ');
+  const score = (m.sets || []).map(s => `${s[0]}-${s[1]}`).join(', ');
+
+  return `<div class="podium-row" style="padding:10px 0;align-items:center;">
+    <div>
+      <div><strong>${esc(labelA)}</strong> <span style="color:var(--muted);">vs</span> <strong>${esc(labelB)}</strong></div>
+      <div class="tourn-meta">${modeLabel} · ${m.date || 'Sin fecha'}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="disp" style="font-size:20px;color:var(--ball);">${score}</span>
+      ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deleteCasualMatch('${m.id}')">✕</button>` : ''}
+    </div>
+  </div>`;
+}
+function casualMatchesListHtml(mode){
+  const matches = (state.casualMatches || []).filter(m => mode === 'doubles' ? m.mode === 'doubles' : (m.mode !== 'doubles'));
   if(matches.length === 0) return '';
+  const rows = [...matches].reverse().map(casualMatchesRowHtml).join('');
+  const title = mode === 'doubles' ? '🎾 Historial de Partidos Libres · Dobles' : '🎾 Historial de Partidos Libres · Singles';
 
-  const rowHtml = (m) => {
-    const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
-    const labelA = m.sideA.map(playerName).join(' / ');
-    const labelB = m.sideB.map(playerName).join(' / ');
-    const score = (m.sets || []).map(s => `${s[0]}-${s[1]}`).join(', ');
-
-    return `<div class="podium-row" style="padding:10px 0;align-items:center;">
-      <div>
-        <div><strong>${esc(labelA)}</strong> <span style="color:var(--muted);">vs</span> <strong>${esc(labelB)}</strong></div>
-        <div class="tourn-meta">${modeLabel} · ${m.date || 'Sin fecha'}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <span class="disp" style="font-size:20px;color:var(--ball);">${score}</span>
-        ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deleteCasualMatch('${m.id}')">✕</button>` : ''}
-      </div>
-    </div>`;
-  };
-
-  const singles = [...matches].filter(m => m.mode !== 'doubles').reverse();
-  const doubles = [...matches].filter(m => m.mode === 'doubles').reverse();
-
-  const section = (title, list) => {
-    if(list.length === 0) return '';
-    return `<div class="card" style="margin-top:26px;">
-      <div class="section-head" style="margin-bottom:8px;">
-        <h3 style="font-size:18px;margin:0;color:var(--chalk);">${title}</h3>
-      </div>
-      <div class="podium">${list.map(rowHtml).join('')}</div>
-    </div>`;
-  };
-
-  return section('🎾 Historial de Partidos Libres · Singles', singles)
-       + section('🎾 Historial de Partidos Libres · Dobles', doubles);
+  return `<div class="card" style="margin-top:26px;">
+    <div class="section-head" style="margin-bottom:8px;">
+      <h3 style="font-size:18px;margin:0;color:var(--chalk);">${title}</h3>
+    </div>
+    <div class="podium">${rows}</div>
+  </div>`;
 }
 
 async function deleteCasualMatch(matchId){
