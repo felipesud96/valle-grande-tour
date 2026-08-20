@@ -1948,6 +1948,13 @@ async function deleteMatch(tid, matchId, isDoubles){
   render();
   openMatchModal(tid, isDoubles);
 }
+function toggleCasualMode(mode){
+  const show = mode === 'doubles';
+  const a2 = document.getElementById('wrap-a2');
+  const b2 = document.getElementById('wrap-b2');
+  if(a2) a2.style.display = show ? '' : 'none';
+  if(b2) b2.style.display = show ? '' : 'none';
+}
 function openCasualMatchModal() {
   if (state.players.length < 2) { 
     aceAlert('Se necesitan al menos 2 jugadores registrados.'); 
