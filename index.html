@@ -2066,6 +2066,44 @@ async function saveCasualMatch(btn) {
   });
   aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!');
 }
+  function casualMatchesListHtml(){
+  const matches = state.casualMatches || [];
+  if(matches.length === 0) return '';
+
+  const rows = [...matches].reverse().map(m => {
+    const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
+    const labelA = m.sideA.map(playerName).join(' / ');
+    const labelB = m.sideB.map(playerName).join(' / ');
+    const score = (m.sets || []).map(s => `${s[0]}-${s[1]}`).join(', ');
+
+    return `<div class="podium-row" style="padding:10px 0;align-items:center;">
+      <div>
+        <div><strong>${esc(labelA)}</strong> <span style="color:var(--muted);">vs</span> <strong>${esc(labelB)}</strong></div>
+        <div class="tourn-meta">${modeLabel} · ${m.date || 'Sin fecha'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="disp" style="font-size:20px;color:var(--ball);">${score}</span>
+        ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deleteCasualMatch('${m.id}')">✕</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="card" style="margin-top:26px;">
+    <div class="section-head" style="margin-bottom:8px;">
+      <h3 style="font-size:18px;margin:0;color:var(--chalk);">🎾 Historial de Partidos Libres</h3>
+    </div>
+    <div class="podium">${rows}</div>
+  </div>`;
+}
+
+async function deleteCasualMatch(matchId){
+  if(!state.isAdmin){ aceAlert('Solo el administrador puede eliminar partidos libres.'); return; }
+  if(!(await confirmDialog('¿Eliminar este partido libre del historial?'))) return;
+  state.casualMatches = (state.casualMatches || []).filter(m => m.id !== matchId);
+  await save('casualMatches', state.casualMatches);
+  render();
+  aceAlert('Partido libre eliminado.');
+}
 // ---- head to head modal ----
 function openH2HModal(){
   if(state.players.length<2){ aceAlert('Necesitas al menos 2 jugadores para comparar.'); return; }
