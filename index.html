@@ -2209,24 +2209,31 @@ async function savePairs(tid){
 }
 function openDoublesResultsModal(tid){
   const t = state.doubles.find(x=>x.id===tid);
-  if((t.pairs||[]).length===0){ aceAlert('Primero arma las parejas de este torneo.'); return; }
-  const pairLabel = (idx)=> t.pairs[idx].map(playerName).join(' / ');
-  const opts = t.pairs.map((pair,idx)=>`<option value="${idx}">${esc(pairLabel(idx))}</option>`).join('');
-  const multiCheck = (role) => t.pairs.map((pair,idx)=>`<label class="check-item"><input type="checkbox" data-role="${role}" value="${idx}" ${(t.results[role]||[]).includes(idx)?'checked':''}> ${esc(pairLabel(idx))}</label>`).join('');
+  const count = (t.pairs||[]).length;
+  if(count===0){ aceAlert('Primero agrega parejas a este torneo.'); return; }
+  
+  const labelOf = (idx)=> (t.pairs[idx]||[]).map(playerName).join(' / ');
+  const opts = t.pairs.map((_,idx)=>`<option value="${idx}">${esc(labelOf(idx))}</option>`).join('');
+  const multiCheck = (role) => t.pairs.map((_,idx)=>`<label class="check-item"><input type="checkbox" data-role="${role}" value="${idx}" ${(t.results[role]||[]).includes(String(idx))?'checked':''}> ${esc(labelOf(idx))}</label>`).join('');
+  
+  const showSemi = count >= 4 ? `<div class="field"><label>Parejas Semifinalistas</label><div class="check-list">${multiCheck('semi')}</div></div>` : '';
+  const showQuarter = count >= 8 ? `<div class="field"><label>Cuartos de final</label><div class="check-list">${multiCheck('quarter')}</div></div>` : '';
+
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
-    <h2>Resultados de dobles</h2>
-    <div class="field"><label>Pareja campeona</label><select id="dr-champion"><option value="">—</option>${opts}</select></div>
-    <div class="field"><label>Pareja finalista</label><select id="dr-finalist"><option value="">—</option>${opts}</select></div>
-    <div class="field"><label>Semifinalistas</label><div class="check-list">${multiCheck('semi')}</div></div>
-    <div class="field"><label>Cuartos de final</label><div class="check-list">${multiCheck('quarter')}</div></div>
+    <h2>Resultados de Dobles</h2>
+    <div class="section-sub" style="margin-bottom:14px;">Quien no quede marcado en ningún cuadro recibe puntos de primera ronda.</div>
+    <div class="field"><label>Pareja Campeona</label><select id="r-champion"><option value="">—</option>${opts}</select></div>
+    <div class="field"><label>Pareja Finalista</label><select id="r-finalist"><option value="">—</option>${opts}</select></div>
+    ${showSemi}
+    ${showQuarter}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="AceApp.saveDoublesResults(this, '${tid}')">Finalizar torneo</button>
     </div>`;
   openModal(html);
-  document.getElementById('dr-champion').value = (t.results.champion||[])[0] ?? '';
-  document.getElementById('dr-finalist').value = (t.results.finalist||[])[0] ?? '';
+  document.getElementById('r-champion').value = (t.results.champion||[])[0] || '';
+  document.getElementById('r-finalist').value = (t.results.finalist||[])[0] || '';
 }
 async function saveDoublesResults(btn, tid){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cargar resultados.'); return; }
