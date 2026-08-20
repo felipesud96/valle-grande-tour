@@ -865,14 +865,55 @@ function shuffleArray(arr){
   return a;
 }
 function drawHtml(t, isDoubles){
-  if(!t.draw || t.draw.length===0) return '';
-  const labelOf = isDoubles ? (key)=> (t.pairs[Number(key)]||[]).map(playerName).join(' / ') : (key)=>playerName(key);
-  const rows = [];
-  for(let i=0;i<t.draw.length;i+=2){
-    const a = t.draw[i], b = t.draw[i+1];
-    rows.push(`<div class="podium-row"><span class="podium-role">Llave ${Math.floor(i/2)+1}</span><span>${esc(labelOf(a))} vs ${b!==undefined ? esc(labelOf(b)) : 'BYE (pasa directo)'}</span></div>`);
-  }
-  return `<div class="podium" style="margin-top:10px;"><div class="tourn-meta" style="margin-bottom:4px;">🎲 Cuadro sorteado</div>${rows.join('')}</div>`;
+  if(!t.bracket || t.bracket.length===0) return '';
+  
+  const labelOf = isDoubles 
+    ? (id) => id ? (t.pairs[Number(id)]||[]).map(playerName).join(' / ') : 'BYE (Pasa directo)'
+    : (id) => id ? playerName(id) : 'BYE (Pasa directo)';
+    
+  const getRoundName = (rIdx, totalRounds) => {
+      const rev = totalRounds - 1 - rIdx;
+      if(rev === 0) return 'Final';
+      if(rev === 1) return 'Semifinal';
+      if(rev === 2) return 'Cuartos de final';
+      if(rev === 3) return 'Octavos de final';
+      return 'Ronda ' + (rIdx + 1);
+  };
+
+  let html = '<div class="bracket-container">';
+  
+  t.bracket.forEach((round, rIdx) => {
+     html += '<div class="bracket-round">';
+     html += `<div class="bracket-round-title">${getRoundName(rIdx, t.bracket.length)}</div>`;
+     
+     round.forEach((m, mIdx) => {
+         const p1Name = labelOf(m.p1);
+         const p2Name = labelOf(m.p2);
+         const isWinner1 = m.winner === m.p1 && m.p1 !== null;
+         const isWinner2 = m.winner === m.p2 && m.p2 !== null;
+         const isPlayable = m.p1 !== null && m.p2 !== null;
+         
+         // Evento temporal: En el paso 4 crearemos el modal para editar el resultado al hacer clic
+const clickAttr = (isPlayable && state.isAdmin) ? `onclick="AceApp.openBracketMatchModal('${t.id}', ${isDoubles}, ${rIdx}, ${mIdx})"` : '';                  
+         html += `
+         <div class="bracket-match" ${clickAttr}>
+             <div class="bracket-player-row ${isWinner1 ? 'winner' : (m.winner ? 'loser' : '')}">
+                 <span class="bp-name">${esc(p1Name)}</span>
+                 ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
+                 ${isWinner1 ? '<span class="bp-check">✓</span>' : ''}
+             </div>
+             <div class="bracket-player-row ${isWinner2 ? 'winner' : (m.winner ? 'loser' : '')}">
+                 <span class="bp-name">${esc(p2Name)}</span>
+                 ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
+                 ${isWinner2 ? '<span class="bp-check">✓</span>' : ''}
+             </div>
+         </div>`;
+     });
+     html += '</div>';
+  });
+  
+  html += '</div>';
+  return html;
 }
 
 // ---------- HALL OF FAME ----------
@@ -1163,20 +1204,14 @@ function viewTournaments(){
         </div>
       </div>
       <div class="tourn-body">
-        ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
-        ${!isDone ? drawHtml(t, false) : ''}
-        <div class="card-actions" style="justify-content:flex-start;margin-top:12px;">
-          ${(t.participants||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchModal('${t.id}', false)">🎾 Marcador ${(t.matches||[]).length?`(${(t.matches||[]).length})`:''}</button>` : ''}
+          ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
+          ${!isDone ? drawHtml(t, false) : ''}
+          ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
+  ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openParticipantsModal('${t.id}')">Inscritos</button>` : ''}
+  ${(!isDone && (t.participants || []).length >= 2) ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', false)">🎲 Sortear cuadro</button>` : ''}
+  <button class="btn btn-danger btn-sm" onclick="AceApp.deleteTournament('${t.id}')">Eliminar</button>
+</div>` : ''}
         </div>
-        ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
-          ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openParticipantsModal('${t.id}')">Inscritos</button>
-          <button class="btn btn-ball btn-sm" onclick="AceApp.openResultsModal('${t.id}')">Cargar resultados</button>
-          ${(t.participants||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', false)">🎲 Sortear cuadro</button>` : ''}` : ''}
-          <button class="btn btn-danger btn-sm" onclick="AceApp.deleteTournament('${t.id}')">Eliminar</button>
-        </div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
   return head + sortBar + cards;
 }
 function podiumHtml(t, isDoubles){
@@ -1272,15 +1307,11 @@ function viewDoubles(){
           </div>
           <div class="tourn-fee"><span class="amt">${fmtMoney(tier.fee)}</span><div class="tourn-meta">cuota por pareja</div></div>
         </div>
-        <div class="tourn-body">
+     <div class="tourn-body">
           ${isDone ? podiumHtml(t, true) : `<div>${pairsHtml || '<span class="tourn-meta">Sin parejas aún.</span>'}</div>`}
           ${!isDone ? drawHtml(t, true) : ''}
-          <div class="card-actions" style="justify-content:flex-start;margin-top:12px;">
-            ${(t.pairs||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchModal('${t.id}', true)">🎾 Marcador ${(t.matches||[]).length?`(${(t.matches||[]).length})`:''}</button>` : ''}
-          </div>
           ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
             ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPairsModal('${t.id}')">Parejas</button>
-            <button class="btn btn-ball btn-sm" onclick="AceApp.openDoublesResultsModal('${t.id}')">Cargar resultados</button>
             ${(t.pairs||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', true)">🎲 Sortear cuadro</button>` : ''}`:''}
             <button class="btn btn-danger btn-sm" onclick="AceApp.deleteDoubles('${t.id}')">Eliminar</button>
           </div>` : ''}
@@ -2549,6 +2580,170 @@ function bootApp(){
       '<button class="btn btn-ball btn-sm" onclick="AceApp.bootApp()">🔄 Reintentar</button></div>';
   });
 }
+bootApp();
+// ---------- NUEVO MODAL DE PARTIDO EN EL ÁRBOL ----------
+function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  const match = t.bracket[rIdx][mIdx];
+
+  const labelOf = isDoubles 
+    ? (id) => (t.pairs[Number(id)]||[]).map(playerName).join(' / ') 
+    : (id) => playerName(id);
+
+  const p1Name = labelOf(match.p1);
+  const p2Name = labelOf(match.p2);
+
+  const isBestOf3 = state.matchRules.format === 'bestOf3';
+  const maxG = state.matchRules.gamesPerSet;
+
+  const setRow = (n) => `
+    <div class="field-row">
+      <div class="field">
+        <label style="color:var(--muted);">${isBestOf3 ? `Set ${n}` : 'Marcador'} (Games)</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" min="0" max="${maxG}" id="bm-s${n}a" placeholder="${esc(p1Name)}" style="width:100%; text-align:center;">
+          <span style="color:var(--muted);">–</span>
+          <input type="number" min="0" max="${maxG}" id="bm-s${n}b" placeholder="${esc(p2Name)}" style="width:100%; text-align:center;">
+        </div>
+      </div>
+    </div>`;
+
+  const html = `
+    <button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <h2>Cargar Marcador</h2>
+    <div class="section-sub" style="margin-bottom: 20px; font-size: 16px; color: var(--ball);">
+      ${esc(p1Name)} <span style="color:var(--muted);font-size:12px;margin:0 5px;">VS</span> ${esc(p2Name)}
+    </div>
+    
+    <div class="field" style="margin-bottom: 20px;">
+      <label>¿Quién avanzará a la siguiente ronda?</label>
+      <select id="bm-winner">
+        <option value="">Selecciona al ganador...</option>
+        <option value="${match.p1}" ${match.winner === match.p1 ? 'selected' : ''}>${esc(p1Name)}</option>
+        <option value="${match.p2}" ${match.winner === match.p2 ? 'selected' : ''}>${esc(p2Name)}</option>
+      </select>
+    </div>
+    
+    <div class="section-sub" style="margin-top:10px;">Anota los games ganados por cada lado:</div>
+    ${setRow(1)}
+    ${isBestOf3 ? setRow(2) + setRow(3) : ''}
+    
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveBracketMatch('${tid}', ${isDoubles}, ${rIdx}, ${mIdx})">Guardar y Avanzar</button>
+    </div>`;
+    
+  openModal(html);
+
+  // Pre-cargar marcador si ya existía uno
+  if(match.sets) {
+    match.sets.forEach((s, i) => {
+      if(s && s.length === 2) {
+        const n = i + 1;
+        const elA = document.getElementById(`bm-s${n}a`);
+        const elB = document.getElementById(`bm-s${n}b`);
+        if(elA && elB) { elA.value = s[0]; elB.value = s[1]; }
+      }
+    });
+  }
+}
+async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  const match = t.bracket[rIdx][mIdx];
+
+  const winnerId = document.getElementById('bm-winner').value;
+  if(!winnerId) { aceAlert('Por favor selecciona al ganador del partido.'); return; }
+
+  const readSet = (aId, bId) => {
+    const aEl = document.getElementById(aId);
+    const bEl = document.getElementById(bId);
+    if(!aEl || !bEl) return null;
+    const a = aEl.value;
+    const b = bEl.value;
+    if(a==='' && b==='') return null;
+    return [a===''?0:Number(a), b===''?0:Number(b)];
+  };
+
+  const sets = (state.matchRules.format === 'bestOf3'
+    ? [readSet('bm-s1a','bm-s1b'), readSet('bm-s2a','bm-s2b'), readSet('bm-s3a','bm-s3b')]
+    : [readSet('bm-s1a','bm-s1b')]
+  ).filter(s => s !== null);
+
+  const scoreLine = sets.map(s => `${s[0]}-${s[1]}`).join('   ');
+
+  match.winner = winnerId;
+  match.scoreLine = scoreLine;
+  match.sets = sets; 
+
+  // Lógica de Auto-Avance o Auto-Cierre
+  const nextRIdx = rIdx + 1;
+  
+  if (nextRIdx < t.bracket.length) {
+    // AÚN QUEDAN RONDAS: Avanzar al ganador a la siguiente caja
+    const nextMIdx = Math.floor(mIdx / 2);
+    const nextMatch = t.bracket[nextRIdx][nextMIdx];
+    
+    if (mIdx % 2 === 0) {
+      nextMatch.p1 = winnerId;
+    } else {
+      nextMatch.p2 = winnerId;
+    }
+    
+    // Limpiar el futuro si se cambia un ganador anterior
+    if(nextMatch.winner !== winnerId) {
+        nextMatch.winner = null;
+        nextMatch.scoreLine = '';
+        nextMatch.sets = [];
+    }
+  } else {
+    // ¡ES LA FINAL! Cerrar el torneo automáticamente y repartir puntos
+    const champion = winnerId;
+    const finalist = match.p1 === winnerId ? match.p2 : match.p1;
+    
+    t.results.champion = [champion];
+    t.results.finalist = finalist && finalist !== 'null' ? [finalist] : [];
+    
+    // Detectar Semifinalistas (perdedores de 1 ronda atrás)
+    t.results.semi = [];
+    if (rIdx >= 1) {
+      t.bracket[rIdx - 1].forEach(m => {
+        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+        if (loser && loser !== 'null') t.results.semi.push(loser);
+      });
+    }
+    
+    // Detectar Cuartos de final (perdedores de 2 rondas atrás)
+    t.results.quarter = [];
+    if (rIdx >= 2) {
+      t.bracket[rIdx - 2].forEach(m => {
+        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+        if (loser && loser !== 'null') t.results.quarter.push(loser);
+      });
+    }
+    
+    t.status = 'completed';
+    aceAlert('🏆 ¡Torneo finalizado! Puntos repartidos al ranking.');
+  }
+
+  // Guardar en Firebase
+  try {
+    await save(isDoubles ? 'doubles' : 'tournaments', list);
+    closeModal();
+    render();
+  } catch(e) {
+    console.error(e);
+    aceAlert('Hubo un error al guardar.');
+  }
+}
+
+// Conectar las funciones a la app
+if(window.AceApp) {
+  window.AceApp.openBracketMatchModal = openBracketMatchModal;
+  window.AceApp.saveBracketMatch = saveBracketMatch;
+}
+
 bootApp();
 
 })();
