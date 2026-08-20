@@ -2114,11 +2114,59 @@ async function drawBracket(tid, isDoubles){
   const list = isDoubles ? state.doubles : state.tournaments;
   const t = list.find(x=>x.id===tid);
   if(!t) return;
+
   const items = isDoubles ? t.pairs.map((_,idx)=>String(idx)) : [...t.participants];
-  if(items.length<2){ aceAlert('Necesitas al menos 2 inscritos para sortear.'); return; }
-  if(t.draw && t.draw.length && !(await confirmDialog('Ya hay un cuadro sorteado. ¿Sortear de nuevo?'))) return;
-  t.draw = shuffleArray(items);
-  await save(isDoubles?'doubles':'tournaments', list);
+  if(items.length < 2){ aceAlert('Necesitas al menos 2 inscritos para sortear.'); return; }
+  if(t.bracket && t.bracket.length > 0 && !(await confirmDialog('Ya hay un cuadro sorteado. ¿Sortear de nuevo? (Se perderán los avances)'))) return;
+
+  const shuffled = shuffleArray(items);
+  const numPlayers = shuffled.length;
+  // Calcula el tamaño del cuadro (2, 4, 8, 16...)
+  const bracketSize = Math.pow(2, Math.ceil(Math.log2(numPlayers))); 
+  const numMatchesR1 = bracketSize / 2;
+
+  // 1. Crear Ronda 0 (Primera ronda)
+  let round0 = [];
+  for(let i=0; i<numMatchesR1; i++) {
+    round0.push({ p1: null, p2: null, winner: null, scoreLine: '' });
+  }
+
+  // Repartir jugadores intercalados. Los que no tengan rival recibirán un BYE.
+  for(let i=0; i<numPlayers; i++) {
+    let matchIdx = i % numMatchesR1;
+    if(!round0[matchIdx].p1) round0[matchIdx].p1 = shuffled[i];
+    else round0[matchIdx].p2 = shuffled[i];
+  }
+
+  // Auto-avanzar a los que tienen "Pase Directo" (BYE)
+  round0.forEach(m => {
+    if(!m.p2) m.winner = m.p1;
+  });
+
+  // 2. Crear las siguientes rondas (Semis, Final, etc) vacías
+  let rounds = [round0];
+  let currentSize = numMatchesR1;
+  let rIdx = 1;
+
+  while(currentSize > 1) {
+    currentSize = currentSize / 2;
+    let round = [];
+    for(let i=0; i<currentSize; i++) {
+      const prev1 = rounds[rIdx-1][i*2];
+      const prev2 = rounds[rIdx-1][i*2+1];
+      round.push({
+        p1: prev1.winner || null,
+        p2: prev2.winner || null,
+        winner: null,
+        scoreLine: ''
+      });
+    }
+    rounds.push(round);
+    rIdx++;
+  }
+
+  t.bracket = rounds;
+  await save(isDoubles ? 'doubles' : 'tournaments', list);
   render();
 }
 
