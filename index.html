@@ -1074,10 +1074,10 @@ function singlesRankingList(){
   return state.players.map(p=>({id:p.id, name:p.name, points: pts[p.id]||0}))
     .sort((a,b)=>b.points-a.points);
 }
+
 function doublesRankingList(){
   const pts = doublesPointsByPlayer();
   return state.players.map(p=>({id:p.id, name:p.name, points: pts[p.id]||0}))
-    .filter(r=>r.points>0 || state.doubles.some(t=>(t.pairs||[]).flat().includes(r.id)))
     .sort((a,b)=>b.points-a.points);
 }
 
