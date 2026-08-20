@@ -1204,20 +1204,14 @@ function viewTournaments(){
         </div>
       </div>
       <div class="tourn-body">
-        ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
-        ${!isDone ? drawHtml(t, false) : ''}
-        <div class="card-actions" style="justify-content:flex-start;margin-top:12px;">
-          ${(t.participants||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchModal('${t.id}', false)">🎾 Marcador ${(t.matches||[]).length?`(${(t.matches||[]).length})`:''}</button>` : ''}
+          ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
+          ${!isDone ? drawHtml(t, false) : ''}
+          ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
+            ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openParticipantsModal('${t.id}')">Inscritos</button>
+            ${(t.participants||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', false)">🎲 Sortear cuadro</button>` : ''}` : ''}
+            <button class="btn btn-danger btn-sm" onclick="AceApp.deleteTournament('${t.id}')">Eliminar</button>
+          </div>` : ''}
         </div>
-        ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
-          ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openParticipantsModal('${t.id}')">Inscritos</button>
-          <button class="btn btn-ball btn-sm" onclick="AceApp.openResultsModal('${t.id}')">Cargar resultados</button>
-          ${(t.participants||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', false)">🎲 Sortear cuadro</button>` : ''}` : ''}
-          <button class="btn btn-danger btn-sm" onclick="AceApp.deleteTournament('${t.id}')">Eliminar</button>
-        </div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
   return head + sortBar + cards;
 }
 function podiumHtml(t, isDoubles){
