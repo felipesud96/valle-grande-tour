@@ -400,14 +400,21 @@
 #ace-app .skel-avatar { width:46px; height:46px; border-radius:50%; flex-shrink:0; }
 #ace-app .skel-line { height:12px; }
 /* Ranking row extras */
-#ace-app .rank-clickable { cursor: pointer; display:flex; align-items:center; gap:12px; flex:1; min-width:0; }
+#ace-app .rank-clickable { cursor: pointer; display:contents; }
 #ace-app .rank-trend { font-size:11px; font-weight:700; margin-left:4px; }
 #ace-app .rank-trend.up { color:#6C8B76; }
 #ace-app .rank-trend.down { color:#B5502E; }
 #ace-app .rank-trend.flat { color:var(--muted); }
 #ace-app .rank-streak { font-size:11px; margin-left:6px; }
 #ace-app .rank-expiry-warn { font-size:10.5px; color:#D8A34C; display:block; margin-top:2px; }
+#ace-app .rank-actions { display:flex; align-items:center; gap:8px; justify-self:end; }
 #ace-app .rank-h2h-btn { flex-shrink:0; }
+/* Circuit awards (trofeos del circuito) */
+#ace-app .award-card { text-align:center; }
+#ace-app .award-emoji { font-size:32px; line-height:1; }
+#ace-app .award-title { font-size:17px; color:var(--ball); margin:8px 0 2px; }
+#ace-app .award-who { font-size:13px; font-weight:700; }
+#ace-app .award-desc { font-size:11px; color:var(--muted); margin-top:4px; }
 </style>
 
 <div id="ace-app">
@@ -1187,6 +1194,96 @@ function playerAvatarHtml(p, size){
   return `<div class="avatar" style="width:${size}px;height:${size}px">${initials}</div>`;
 }
 
+// ---------- CIRCUIT-WIDE FUN AWARDS ----------
+function allHeadToHeadPairs(){
+  const map = {};
+  allSinglesMatches().forEach(m=>{
+    const a = m.sideA[0], b = m.sideB[0];
+    if(!a || !b || a===b) return;
+    const [idX, idY] = [a,b].sort();
+    const key = idX+'|'+idY;
+    if(!map[key]) map[key] = { idX, idY, winsX:0, winsY:0, total:0 };
+    const winnerSide = matchWinnerSide(m);
+    if(!winnerSide) return;
+    const winnerId = winnerSide==='A' ? a : b;
+    map[key].total++;
+    if(winnerId===idX) map[key].winsX++; else if(winnerId===idY) map[key].winsY++;
+  });
+  return Object.values(map);
+}
+function mostBalancedRivalry(){
+  const pairs = allHeadToHeadPairs().filter(p=>p.total>=2);
+  let best=null;
+  pairs.forEach(p=>{
+    const diff = Math.abs(p.winsX-p.winsY);
+    const score = diff*10 - p.total;
+    if(!best || score<best.score) best = {...p, diff, score};
+  });
+  return best;
+}
+function biggestDomination(){
+  const pairs = allHeadToHeadPairs().filter(p=>p.total>=2 && (p.winsX===0 || p.winsY===0));
+  let best=null;
+  pairs.forEach(p=>{
+    const dominantWins = Math.max(p.winsX,p.winsY);
+    if(!best || dominantWins>best.wins){
+      const dominantId = p.winsX>p.winsY ? p.idX : p.idY;
+      const kidId = p.winsX>p.winsY ? p.idY : p.idX;
+      best = { dominantId, kidId, wins: dominantWins, total: p.total };
+    }
+  });
+  return best;
+}
+function maratonMan(){
+  let best=null;
+  state.players.forEach(p=>{
+    const stat = playerMatchStats(p.id);
+    if(stat.played>0 && (!best || stat.played>best.played)) best = { id:p.id, played: stat.played };
+  });
+  return best;
+}
+function mostBalancedPlayer(){
+  let best=null;
+  state.players.forEach(p=>{
+    const stat = playerMatchStats(p.id);
+    if(stat.played>=3){
+      const d = Math.abs(50-stat.pct);
+      if(!best || d<best.d) best = { id:p.id, pct: stat.pct, d };
+    }
+  });
+  return best;
+}
+function longestHistoricStreak(){
+  let best=null;
+  state.players.forEach(p=>{
+    const results = singlesMatchResultsForPlayer(p.id);
+    let cur=0, max=0;
+    results.forEach(r=>{ if(r.won){ cur++; if(cur>max) max=cur; } else cur=0; });
+    if(max>=3 && (!best || max>best.streak)) best = { id:p.id, streak:max };
+  });
+  return best;
+}
+function circuitAwards(){
+  const list = [];
+  const ct = maxCombinedTitles();
+  if(ct>=2){
+    const goat = state.players.find(p=>combinedTitles(p.id)===ct);
+    if(goat) list.push({emoji:'🐐', title:'El GOAT', who:playerName(goat.id), desc:`${ct} título(s) combinados. El más grande del circuito, a criterio de los resultados.`});
+  }
+  const rivalry = mostBalancedRivalry();
+  if(rivalry) list.push({emoji:'⚖️', title:'El rival más parejo', who:`${playerName(rivalry.idX)} vs ${playerName(rivalry.idY)}`, desc:`${rivalry.winsX}-${rivalry.winsY} en ${rivalry.total} partidos. Ninguno se saca ventaja.`});
+  const dom = biggestDomination();
+  if(dom) list.push({emoji:'👶', title:'El hijo del circuito', who:`${playerName(dom.kidId)} es hijo de ${playerName(dom.dominantId)}`, desc:`${dom.wins}-0 en ${dom.total} partidos. No le gana ni de local.`});
+  const blow = biggestBlowout();
+  if(blow) list.push({emoji:'💥', title:'La paliza del circuito', who:`${playerName(blow.winnerId)} a ${playerName(blow.loserId)}`, desc:`Diferencia de ${blow.diff} games en un mismo partido.`});
+  const maraton = maratonMan();
+  if(maraton && maraton.played>=3) list.push({emoji:'🏃', title:'El maratónico', who:playerName(maraton.id), desc:`${maraton.played} partidos individuales jugados. El que nunca falta.`});
+  const balanced = mostBalancedPlayer();
+  if(balanced) list.push({emoji:'🧘', title:'Zen absoluto', who:playerName(balanced.id), desc:`${balanced.pct}% de victorias. Ni tan bueno ni tan malo, el equilibrio hecho jugador.`});
+  const streak = longestHistoricStreak();
+  if(streak) list.push({emoji:'🔥', title:'La racha más larga', who:playerName(streak.id), desc:`${streak.streak} victorias seguidas en algún momento del circuito.`});
+  return list;
+}
 function autoBadges(playerId){
   const singlesTitles = (titlesByPlayer(state.tournaments,false)[playerId])||0;
   const doublesTitles = (titlesByPlayer(state.doubles,true)[playerId])||0;
@@ -1393,8 +1490,10 @@ function viewRanking(){
           ${expiring ? `<span class="rank-expiry-warn">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')}</span>` : ''}
         </div>
       </div>
-      <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">🤝</button>
-      <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
+      <div class="rank-actions">
+        <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">🤝</button>
+        <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
+      </div>
     </div>`;
   }).join('');
 
@@ -1602,6 +1701,15 @@ function viewAchievements(){
   if(state.players.length===0){
     return head + `<div class="empty">Agrega jugadores para empezar a ver logros.</div>`;
   }
+  const circuit = circuitAwards();
+  const circuitSection = circuit.length ? `<div class="grid">
+    ${circuit.map(a=>`<div class="card award-card">
+      <div class="award-emoji">${a.emoji}</div>
+      <div class="disp award-title">${esc(a.title)}</div>
+      <div class="award-who">${esc(a.who)}</div>
+      <div class="award-desc">${esc(a.desc)}</div>
+    </div>`).join('')}
+  </div>` : '';
   const autoSection = state.players.map(p=>{
     const badges = autoBadges(p.id);
     if(badges.length===0) return '';
@@ -1627,7 +1735,9 @@ function viewAchievements(){
     </div>`).join('');
 
   return head +
-    `<h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias automáticas</h3>
+    `<h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Trofeos del circuito</h3>
+    ${circuitSection || '<div class="empty">Jueguen algunos partidos individuales para desbloquear los trofeos divertidos del circuito (el GOAT, el rival más parejo, el hijo del circuito...).</div>'}
+    <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias automáticas</h3>
     ${autoSection || '<div class="empty">Todavía nadie desbloquea insignias.</div>'}
     <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Reconocimientos del grupo</h3>
     ${manual || '<div class="empty">Agreguen su primer logro personalizado: mejor drive, revés más elegante, el que nunca falta a los torneos, etc.</div>'}`;
