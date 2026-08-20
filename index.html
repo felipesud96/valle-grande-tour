@@ -1207,10 +1207,10 @@ function viewTournaments(){
           ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
           ${!isDone ? drawHtml(t, false) : ''}
           ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
-            ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openParticipantsModal('${t.id}')">Inscritos</button>
-            ${(t.participants||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', false)">🎲 Sortear cuadro</button>` : ''}` : ''}
-            <button class="btn btn-danger btn-sm" onclick="AceApp.deleteTournament('${t.id}')">Eliminar</button>
-          </div>` : ''}
+  ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openParticipantsModal('${t.id}')">Inscritos</button>` : ''}
+  ${(!isDone && (t.participants || []).length >= 2) ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', false)">🎲 Sortear cuadro</button>` : ''}
+  <button class="btn btn-danger btn-sm" onclick="AceApp.deleteTournament('${t.id}')">Eliminar</button>
+</div>` : ''}
         </div>
   return head + sortBar + cards;
 }
@@ -2737,12 +2737,14 @@ async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
     aceAlert('Hubo un error al guardar.');
   }
 }
-}
 
 // Conectar las funciones a la app
 if(window.AceApp) {
   window.AceApp.openBracketMatchModal = openBracketMatchModal;
   window.AceApp.saveBracketMatch = saveBracketMatch;
 }
+
+bootApp();
+
 })();
 </script>
