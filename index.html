@@ -1378,13 +1378,19 @@ function setTournamentSort(v){ state.tournamentSort = v; render(); }
 // ---------- VIEW: DOUBLES ----------
 function viewDoubles(){
   const rankList = doublesRankingList();
-  const rankHtml = rankList.length ? rankList.map((r,i)=>`
+  const rankHtml = rankList.length ? rankList.map((r,i)=>{
+    const p = playerById(r.id);
+    return `
     <div class="rank-row ${i===0?'top1':''}">
       <div class="rank-pos">${i+1}</div>
-      ${playerAvatarHtml(playerById(r.id),46)}
-      <div class="rank-name-block"><span class="rank-name">${esc(r.name)}</span><span class="rank-meta">Ranking de dobles</span></div>
+      ${playerAvatarHtml(p,46)}
+      <div class="rank-name-block">
+        <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''}</span>
+        <span class="rank-meta">Ranking de dobles</span>
+      </div>
       <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
-    </div>`).join('') : `<div class="empty">Sin puntos de dobles todavía.</div>`;
+    </div>`;
+  }).join('') : `<div class="empty">Sin puntos de dobles todavía.</div>`;
 
   const head = `<div class="section-head"><h2>Dobles</h2>${state.isAdmin?`<button class="btn btn-primary" onclick="AceApp.openDoublesModal()">+ Nuevo torneo de dobles</button>`:''}</div>
   <div class="section-sub">${ruleDescription()}</div>`;
