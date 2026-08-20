@@ -1251,7 +1251,8 @@ function viewRanking(){
   </div>
   <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres.</div>
   ${rankingEvolutionSvg()}
-  <div class="rank-table">${rows}</div>`;
+  <div class="rank-table">${rows}</div>
+  ${casualMatchesListHtml()}`;
 }
 function playerMetaShort(p){
   const bits = [];
