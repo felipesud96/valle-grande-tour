@@ -673,6 +673,7 @@ function matchRulesOf(t){
 
 // ---------- STORAGE ----------
 async function loadAll(){
+  state.casualMatches = await safeGet('casualMatches', []);
   state.players = await safeGet('players', []);
   state.tournaments = await safeGet('tournaments', []);
   state.doubles = await safeGet('doubles', []);
