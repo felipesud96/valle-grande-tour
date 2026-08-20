@@ -865,14 +865,56 @@ function shuffleArray(arr){
   return a;
 }
 function drawHtml(t, isDoubles){
-  if(!t.draw || t.draw.length===0) return '';
-  const labelOf = isDoubles ? (key)=> (t.pairs[Number(key)]||[]).map(playerName).join(' / ') : (key)=>playerName(key);
-  const rows = [];
-  for(let i=0;i<t.draw.length;i+=2){
-    const a = t.draw[i], b = t.draw[i+1];
-    rows.push(`<div class="podium-row"><span class="podium-role">Llave ${Math.floor(i/2)+1}</span><span>${esc(labelOf(a))} vs ${b!==undefined ? esc(labelOf(b)) : 'BYE (pasa directo)'}</span></div>`);
-  }
-  return `<div class="podium" style="margin-top:10px;"><div class="tourn-meta" style="margin-bottom:4px;">🎲 Cuadro sorteado</div>${rows.join('')}</div>`;
+  if(!t.bracket || t.bracket.length===0) return '';
+  
+  const labelOf = isDoubles 
+    ? (id) => id ? (t.pairs[Number(id)]||[]).map(playerName).join(' / ') : 'BYE (Pasa directo)'
+    : (id) => id ? playerName(id) : 'BYE (Pasa directo)';
+    
+  const getRoundName = (rIdx, totalRounds) => {
+      const rev = totalRounds - 1 - rIdx;
+      if(rev === 0) return 'Final';
+      if(rev === 1) return 'Semifinal';
+      if(rev === 2) return 'Cuartos de final';
+      if(rev === 3) return 'Octavos de final';
+      return 'Ronda ' + (rIdx + 1);
+  };
+
+  let html = '<div class="bracket-container">';
+  
+  t.bracket.forEach((round, rIdx) => {
+     html += '<div class="bracket-round">';
+     html += `<div class="bracket-round-title">${getRoundName(rIdx, t.bracket.length)}</div>`;
+     
+     round.forEach((m, mIdx) => {
+         const p1Name = labelOf(m.p1);
+         const p2Name = labelOf(m.p2);
+         const isWinner1 = m.winner === m.p1 && m.p1 !== null;
+         const isWinner2 = m.winner === m.p2 && m.p2 !== null;
+         const isPlayable = m.p1 !== null && m.p2 !== null;
+         
+         // Evento temporal: En el paso 4 crearemos el modal para editar el resultado al hacer clic
+         const clickAttr = (isPlayable && state.isAdmin) ? `onclick="alert('Aquí abriremos el marcador entre ${esc(p1Name)} y ${esc(p2Name)}')"` : '';
+         
+         html += `
+         <div class="bracket-match" ${clickAttr}>
+             <div class="bracket-player-row ${isWinner1 ? 'winner' : (m.winner ? 'loser' : '')}">
+                 <span class="bp-name">${esc(p1Name)}</span>
+                 ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
+                 ${isWinner1 ? '<span class="bp-check">✓</span>' : ''}
+             </div>
+             <div class="bracket-player-row ${isWinner2 ? 'winner' : (m.winner ? 'loser' : '')}">
+                 <span class="bp-name">${esc(p2Name)}</span>
+                 ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
+                 ${isWinner2 ? '<span class="bp-check">✓</span>' : ''}
+             </div>
+         </div>`;
+     });
+     html += '</div>';
+  });
+  
+  html += '</div>';
+  return html;
 }
 
 // ---------- HALL OF FAME ----------
