@@ -894,8 +894,7 @@ function drawHtml(t, isDoubles){
          const isPlayable = m.p1 !== null && m.p2 !== null;
          
          // Evento temporal: En el paso 4 crearemos el modal para editar el resultado al hacer clic
-         const clickAttr = (isPlayable && state.isAdmin) ? `onclick="alert('Aquí abriremos el marcador entre ${esc(p1Name)} y ${esc(p2Name)}')"` : '';
-         
+const clickAttr = (isPlayable && state.isAdmin) ? `onclick="AceApp.openBracketMatchModal('${t.id}', ${isDoubles}, ${rIdx}, ${mIdx})"` : '';                  
          html += `
          <div class="bracket-match" ${clickAttr}>
              <div class="bracket-player-row ${isWinner1 ? 'winner' : (m.winner ? 'loser' : '')}">
@@ -2592,6 +2591,132 @@ function bootApp(){
   });
 }
 bootApp();
+// ---------- NUEVO MODAL DE PARTIDO EN EL ÁRBOL ----------
+function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  const match = t.bracket[rIdx][mIdx];
 
+  const labelOf = isDoubles 
+    ? (id) => (t.pairs[Number(id)]||[]).map(playerName).join(' / ') 
+    : (id) => playerName(id);
+
+  const p1Name = labelOf(match.p1);
+  const p2Name = labelOf(match.p2);
+
+  const isBestOf3 = state.matchRules.format === 'bestOf3';
+  const maxG = state.matchRules.gamesPerSet;
+
+  const setRow = (n) => `
+    <div class="field-row">
+      <div class="field">
+        <label style="color:var(--muted);">${isBestOf3 ? `Set ${n}` : 'Marcador'} (Games)</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" min="0" max="${maxG}" id="bm-s${n}a" placeholder="${esc(p1Name)}" style="width:100%; text-align:center;">
+          <span style="color:var(--muted);">–</span>
+          <input type="number" min="0" max="${maxG}" id="bm-s${n}b" placeholder="${esc(p2Name)}" style="width:100%; text-align:center;">
+        </div>
+      </div>
+    </div>`;
+
+  const html = `
+    <button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <h2>Cargar Marcador</h2>
+    <div class="section-sub" style="margin-bottom: 20px; font-size: 16px; color: var(--ball);">
+      ${esc(p1Name)} <span style="color:var(--muted);font-size:12px;margin:0 5px;">VS</span> ${esc(p2Name)}
+    </div>
+    
+    <div class="field" style="margin-bottom: 20px;">
+      <label>¿Quién avanzará a la siguiente ronda?</label>
+      <select id="bm-winner">
+        <option value="">Selecciona al ganador...</option>
+        <option value="${match.p1}" ${match.winner === match.p1 ? 'selected' : ''}>${esc(p1Name)}</option>
+        <option value="${match.p2}" ${match.winner === match.p2 ? 'selected' : ''}>${esc(p2Name)}</option>
+      </select>
+    </div>
+    
+    <div class="section-sub" style="margin-top:10px;">Anota los games ganados por cada lado:</div>
+    ${setRow(1)}
+    ${isBestOf3 ? setRow(2) + setRow(3) : ''}
+    
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveBracketMatch('${tid}', ${isDoubles}, ${rIdx}, ${mIdx})">Guardar y Avanzar</button>
+    </div>`;
+    
+  openModal(html);
+
+  // Pre-cargar marcador si ya existía uno
+  if(match.sets) {
+    match.sets.forEach((s, i) => {
+      if(s && s.length === 2) {
+        const n = i + 1;
+        const elA = document.getElementById(`bm-s${n}a`);
+        const elB = document.getElementById(`bm-s${n}b`);
+        if(elA && elB) { elA.value = s[0]; elB.value = s[1]; }
+      }
+    });
+  }
+}
+
+async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  const match = t.bracket[rIdx][mIdx];
+
+  const winnerId = document.getElementById('bm-winner').value;
+  if(!winnerId) { aceAlert('Por favor selecciona al ganador del partido.'); return; }
+
+  const readSet = (aId, bId) => {
+    const aEl = document.getElementById(aId);
+    const bEl = document.getElementById(bId);
+    if(!aEl || !bEl) return null;
+    const a = aEl.value;
+    const b = bEl.value;
+    if(a==='' && b==='') return null;
+    return [a===''?0:Number(a), b===''?0:Number(b)];
+  };
+
+  const sets = (state.matchRules.format === 'bestOf3'
+    ? [readSet('bm-s1a','bm-s1b'), readSet('bm-s2a','bm-s2b'), readSet('bm-s3a','bm-s3b')]
+    : [readSet('bm-s1a','bm-s1b')]
+  ).filter(s => s !== null);
+
+  // Formatear texto del marcador para que se vea en el cuadro (Ej: 6-4  4-6  7-6)
+  const scoreLine = sets.map(s => `${s[0]}-${s[1]}`).join('   ');
+
+  match.winner = winnerId;
+  match.scoreLine = scoreLine;
+  match.sets = sets; 
+
+  // Lógica de Auto-Avance a la siguiente ronda
+  const nextRIdx = rIdx + 1;
+  if (nextRIdx < t.bracket.length) {
+    const nextMIdx = Math.floor(mIdx / 2);
+    const nextMatch = t.bracket[nextRIdx][nextMIdx];
+    
+    if (mIdx % 2 === 0) {
+      nextMatch.p1 = winnerId;
+    } else {
+      nextMatch.p2 = winnerId;
+    }
+    
+    if(nextMatch.winner !== winnerId) {
+        nextMatch.winner = null;
+        nextMatch.scoreLine = '';
+        nextMatch.sets = [];
+    }
+  }
+
+  await save(isDoubles ? 'doubles' : 'tournaments', list);
+  closeModal();
+  render();
+}
+
+// Conectar las funciones a la app
+if(window.AceApp) {
+  window.AceApp.openBracketMatchModal = openBracketMatchModal;
+  window.AceApp.saveBracketMatch = saveBracketMatch;
+}
 })();
 </script>
