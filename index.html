@@ -710,23 +710,72 @@ async function save(key, value, shared=true){
 }
 
 // ---------- COMPUTATION ----------
-function singlesPointsByPlayer(){
+function singlesPointsByPlayer() {
   const pts = {};
   state.players.forEach(p => pts[p.id] = 0);
-  state.tournaments.filter(t=>t.status==='completed').forEach(t=>{
-    const tier = tierOf(t.tier);
-    if(!tier) return;
-    const assigned = new Set();
-    ['champion','finalist','semi','quarter'].forEach(role=>{
-      (t.results[role]||[]).forEach(pid=>{
-        pts[pid] = (pts[pid]||0) + tier.points[role];
-        assigned.add(pid);
+
+  // 1. Games de Torneos Individuales
+  state.tournaments.forEach(t => {
+    if (t.bracket) {
+      t.bracket.flat().forEach(m => {
+        if (m.sets && m.p1 && m.p2) {
+          let g1 = 0, g2 = 0;
+          m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
+
+          if (pts[m.p1] !== undefined) pts[m.p1] += g1;
+          if (pts[m.p2] !== undefined) pts[m.p2] += g2;
+        }
       });
-    });
-    (t.participants||[]).forEach(pid=>{
-      if(!assigned.has(pid)) pts[pid] = (pts[pid]||0) + tier.points.r1;
-    });
+    }
   });
+
+  // 2. Games de Partidos Libres en modalidad SINGLES
+  (state.casualMatches || []).forEach(m => {
+    if (m.mode === 'singles' || !m.mode) {
+      let gA = 0, gB = 0;
+      (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
+
+      (m.sideA || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gA; });
+      (m.sideB || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gB; });
+    }
+  });
+
+  return pts;
+}
+
+function doublesPointsByPlayer() {
+  const pts = {};
+  state.players.forEach(p => pts[p.id] = 0);
+
+  // 1. Games de Torneos de Dobles
+  state.doubles.forEach(t => {
+    if (t.bracket) {
+      t.bracket.flat().forEach(m => {
+        if (m.sets && m.p1 && m.p2) {
+          let g1 = 0, g2 = 0;
+          m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
+
+          const pair1 = t.pairs[Number(m.p1)] || [];
+          const pair2 = t.pairs[Number(m.p2)] || [];
+
+          pair1.forEach(pid => { if (pts[pid] !== undefined) pts[pid] += g1; });
+          pair2.forEach(pid => { if (pts[pid] !== undefined) pts[pid] += g2; });
+        }
+      });
+    }
+  });
+
+  // 2. Games de Partidos Libres en modalidad DOBLES
+  (state.casualMatches || []).forEach(m => {
+    if (m.mode === 'doubles') {
+      let gA = 0, gB = 0;
+      (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
+
+      (m.sideA || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gA; });
+      (m.sideB || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gB; });
+    }
+  });
+
   return pts;
 }
 function doublesPointsByPlayer(){
