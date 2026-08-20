@@ -2038,7 +2038,7 @@ async function saveCasualMatch(btn) {
   const matches = state.casualMatches || [];
   if(matches.length === 0) return '';
 
-  const rows = [...matches].reverse().map(m => {
+  const rowHtml = (m) => {
     const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
     const labelA = m.sideA.map(playerName).join(' / ');
     const labelB = m.sideB.map(playerName).join(' / ');
@@ -2054,14 +2054,23 @@ async function saveCasualMatch(btn) {
         ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deleteCasualMatch('${m.id}')">✕</button>` : ''}
       </div>
     </div>`;
-  }).join('');
+  };
 
-  return `<div class="card" style="margin-top:26px;">
-    <div class="section-head" style="margin-bottom:8px;">
-      <h3 style="font-size:18px;margin:0;color:var(--chalk);">🎾 Historial de Partidos Libres</h3>
-    </div>
-    <div class="podium">${rows}</div>
-  </div>`;
+  const singles = [...matches].filter(m => m.mode !== 'doubles').reverse();
+  const doubles = [...matches].filter(m => m.mode === 'doubles').reverse();
+
+  const section = (title, list) => {
+    if(list.length === 0) return '';
+    return `<div class="card" style="margin-top:26px;">
+      <div class="section-head" style="margin-bottom:8px;">
+        <h3 style="font-size:18px;margin:0;color:var(--chalk);">${title}</h3>
+      </div>
+      <div class="podium">${list.map(rowHtml).join('')}</div>
+    </div>`;
+  };
+
+  return section('🎾 Historial de Partidos Libres · Singles', singles)
+       + section('🎾 Historial de Partidos Libres · Dobles', doubles);
 }
 
 async function deleteCasualMatch(matchId){
