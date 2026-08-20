@@ -1307,15 +1307,11 @@ function viewDoubles(){
           </div>
           <div class="tourn-fee"><span class="amt">${fmtMoney(tier.fee)}</span><div class="tourn-meta">cuota por pareja</div></div>
         </div>
-        <div class="tourn-body">
+     <div class="tourn-body">
           ${isDone ? podiumHtml(t, true) : `<div>${pairsHtml || '<span class="tourn-meta">Sin parejas aún.</span>'}</div>`}
           ${!isDone ? drawHtml(t, true) : ''}
-          <div class="card-actions" style="justify-content:flex-start;margin-top:12px;">
-            ${(t.pairs||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchModal('${t.id}', true)">🎾 Marcador ${(t.matches||[]).length?`(${(t.matches||[]).length})`:''}</button>` : ''}
-          </div>
           ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
             ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPairsModal('${t.id}')">Parejas</button>
-            <button class="btn btn-ball btn-sm" onclick="AceApp.openDoublesResultsModal('${t.id}')">Cargar resultados</button>
             ${(t.pairs||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', true)">🎲 Sortear cuadro</button>` : ''}`:''}
             <button class="btn btn-danger btn-sm" onclick="AceApp.deleteDoubles('${t.id}')">Eliminar</button>
           </div>` : ''}
@@ -2652,7 +2648,6 @@ function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
     });
   }
 }
-
 async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
   const list = isDoubles ? state.doubles : state.tournaments;
   const t = list.find(x=>x.id===tid);
@@ -2676,16 +2671,17 @@ async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
     : [readSet('bm-s1a','bm-s1b')]
   ).filter(s => s !== null);
 
-  // Formatear texto del marcador para que se vea en el cuadro (Ej: 6-4  4-6  7-6)
   const scoreLine = sets.map(s => `${s[0]}-${s[1]}`).join('   ');
 
   match.winner = winnerId;
   match.scoreLine = scoreLine;
   match.sets = sets; 
 
-  // Lógica de Auto-Avance a la siguiente ronda
+  // Lógica de Auto-Avance o Auto-Cierre
   const nextRIdx = rIdx + 1;
+  
   if (nextRIdx < t.bracket.length) {
+    // AÚN QUEDAN RONDAS: Avanzar al ganador a la siguiente caja
     const nextMIdx = Math.floor(mIdx / 2);
     const nextMatch = t.bracket[nextRIdx][nextMIdx];
     
@@ -2695,16 +2691,52 @@ async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
       nextMatch.p2 = winnerId;
     }
     
+    // Limpiar el futuro si se cambia un ganador anterior
     if(nextMatch.winner !== winnerId) {
         nextMatch.winner = null;
         nextMatch.scoreLine = '';
         nextMatch.sets = [];
     }
+  } else {
+    // ¡ES LA FINAL! Cerrar el torneo automáticamente y repartir puntos
+    const champion = winnerId;
+    const finalist = match.p1 === winnerId ? match.p2 : match.p1;
+    
+    t.results.champion = [champion];
+    t.results.finalist = finalist && finalist !== 'null' ? [finalist] : [];
+    
+    // Detectar Semifinalistas (perdedores de 1 ronda atrás)
+    t.results.semi = [];
+    if (rIdx >= 1) {
+      t.bracket[rIdx - 1].forEach(m => {
+        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+        if (loser && loser !== 'null') t.results.semi.push(loser);
+      });
+    }
+    
+    // Detectar Cuartos de final (perdedores de 2 rondas atrás)
+    t.results.quarter = [];
+    if (rIdx >= 2) {
+      t.bracket[rIdx - 2].forEach(m => {
+        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+        if (loser && loser !== 'null') t.results.quarter.push(loser);
+      });
+    }
+    
+    t.status = 'completed';
+    aceAlert('🏆 ¡Torneo finalizado! Puntos repartidos al ranking.');
   }
 
-  await save(isDoubles ? 'doubles' : 'tournaments', list);
-  closeModal();
-  render();
+  // Guardar en Firebase
+  try {
+    await save(isDoubles ? 'doubles' : 'tournaments', list);
+    closeModal();
+    render();
+  } catch(e) {
+    console.error(e);
+    aceAlert('Hubo un error al guardar.');
+  }
+}
 }
 
 // Conectar las funciones a la app
