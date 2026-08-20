@@ -311,6 +311,80 @@
   #ace-app .tab { font-size: 10.5px; padding: 10px 4px 8px; flex: 1; text-align: center; white-space: normal; }
   #ace-app .wrap { padding-bottom: 76px; }
 }
+  /* ---------- BRACKET VISUAL (ÁRBOL DE TORNEO) ---------- */
+#ace-app .bracket-container {
+  display: flex;
+  gap: 30px;
+  overflow-x: auto;
+  padding: 16px 0 24px;
+  margin-top: 10px;
+}
+#ace-app .bracket-round {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 15px;
+  min-width: 250px;
+}
+#ace-app .bracket-round-title {
+  text-align: center;
+  font-family: 'Bebas Neue';
+  font-size: 18px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+#ace-app .bracket-match {
+  background: var(--court-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#ace-app .bracket-match:hover {
+  border-color: var(--ball);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+#ace-app .bracket-player-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+#ace-app .bracket-player-row:last-child {
+  border-bottom: none;
+}
+#ace-app .bracket-player-row.winner .bp-name,
+#ace-app .bracket-player-row.winner .bp-score {
+  color: var(--chalk);
+  font-weight: 700;
+}
+#ace-app .bracket-player-row.loser .bp-name, 
+#ace-app .bracket-player-row.loser .bp-score {
+  color: var(--muted);
+}
+#ace-app .bp-name {
+  flex: 1;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#ace-app .bp-score {
+  display: flex;
+  gap: 8px;
+  font-family: 'Bebas Neue';
+  font-size: 16px;
+  margin-left: 10px;
+  color: var(--muted);
+}
+#ace-app .bp-check {
+  color: var(--ball);
+  font-size: 14px;
+  margin-left: 8px;
+}
 </style>
 
 <div id="ace-app">
