@@ -1940,7 +1940,103 @@ async function deleteMatch(tid, matchId, isDoubles){
   render();
   openMatchModal(tid, isDoubles);
 }
+function openCasualMatchModal() {
+  if (state.players.length < 2) { 
+    aceAlert('Se necesitan al menos 2 jugadores registrados.'); 
+    return; 
+  }
 
+  const playerOpts = state.players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+
+  const html = `
+    <button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <h2>Anotar Partido Libre / Desafío</h2>
+    <div class="section-sub">Los games ganados sumarán +1 punto individual a cada jugador.</div>
+    
+    <div class="field">
+      <label>Modalidad</label>
+      <select id="cm-mode" onchange="AceApp.toggleCasualMode(this.value)">
+        <option value="singles">Singles (1 vs 1)</option>
+        <option value="doubles">Dobles (2 vs 2)</option>
+      </select>
+    </div>
+
+    <!-- Lado A -->
+    <div class="field-row">
+      <div class="field"><label>Jugador A1</label><select id="cm-a1">${playerOpts}</select></div>
+      <div class="field" id="wrap-a2" style="display:none;"><label>Jugador A2</label><select id="cm-a2">${playerOpts}</select></div>
+    </div>
+
+    <!-- Lado B -->
+    <div class="field-row">
+      <div class="field"><label>Jugador B1</label><select id="cm-b1">${playerOpts}</select></div>
+      <div class="field" id="wrap-b2" style="display:none;"><label>Jugador B2</label><select id="cm-b2">${playerOpts}</select></div>
+    </div>
+
+    <div class="field"><label>Fecha</label><input type="date" id="cm-date" value="${new Date().toISOString().slice(0,10)}"></div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Games Marcador (Lado A vs Lado B)</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" min="0" max="9" id="cm-s1a" placeholder="A" style="text-align:center;">
+          <span style="color:var(--muted);">–</span>
+          <input type="number" min="0" max="9" id="cm-s1b" placeholder="B" style="text-align:center;">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="AceApp.saveCasualMatch(this)">Guardar Partido</button>
+    </div>`;
+
+  openModal(html);
+}
+
+async function saveCasualMatch(btn) {
+  const mode = document.getElementById('cm-mode').value;
+  const a1 = document.getElementById('cm-a1').value;
+  const b1 = document.getElementById('cm-b1').value;
+  let sideA = [a1];
+  let sideB = [b1];
+
+  if (mode === 'doubles') {
+    const a2 = document.getElementById('cm-a2').value;
+    const b2 = document.getElementById('cm-b2').value;
+    if (a1 === a2 || b1 === b2) { aceAlert('Las parejas deben estar compuestas por jugadores distintos.'); return; }
+    sideA.push(a2);
+    sideB.push(b2);
+  }
+
+  const allPlayers = [...sideA, ...sideB];
+  if (new Set(allPlayers).size !== allPlayers.length) {
+    aceAlert('Un jugador no puede estar en ambos lados del partido.');
+    return;
+  }
+
+  const gA = document.getElementById('cm-s1a').value;
+  const gB = document.getElementById('cm-s1b').value;
+  if (gA === '' || gB === '') { aceAlert('Ingresa el resultado de games.'); return; }
+
+  const matchData = {
+    id: uid(),
+    date: document.getElementById('cm-date').value,
+    mode,
+    sideA,
+    sideB,
+    sets: [[Number(gA), Number(gB)]]
+  };
+
+  await withLoading(btn, 'Guardando...', async () => {
+    state.casualMatches = state.casualMatches || [];
+    state.casualMatches.push(matchData);
+    await save('casualMatches', state.casualMatches);
+    closeModal();
+    render();
+  });
+  aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!');
+}
 // ---- head to head modal ----
 function openH2HModal(){
   if(state.players.length<2){ aceAlert('Necesitas al menos 2 jugadores para comparar.'); return; }
