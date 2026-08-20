@@ -611,10 +611,10 @@ async function seedIfEmpty() {
 (function(){
 
 let TIERS = [
-  { id:'slam', label:'Grand Slam del Circuito', short:'GS', points:{champion:1000, finalist:650, semi:400, quarter:200, r1:100}, fee:4000, color:'#B5502E' },
-  { id:'masters', label:'Masters 1000', short:'M1000', points:{champion:600, finalist:380, semi:230, quarter:110, r1:50}, fee:3000, color:'#8C3D22' },
-  { id:'500', label:'Abierto 500', short:'500', points:{champion:300, finalist:180, semi:100, quarter:45, r1:20}, fee:2000, color:'#4C7A5B' },
-  { id:'250', label:'Copa 250', short:'250', points:{champion:150, finalist:90, semi:50, quarter:20, r1:10}, fee:1000, color:'#6C8B76' },
+  { id:'slam', label:'Grand Slam del Circuito', short:'GS', points:{champion:2000, finalist:1200, semi:720, quarter:360, r1:10}, fee:4000, color:'#B5502E' },
+  { id:'masters', label:'Masters 1000', short:'M1000', points:{champion:1000, finalist:600, semi:360, quarter:180, r1:25}, fee:3000, color:'#8C3D22' },
+  { id:'500', label:'Abierto 500', short:'500', points:{champion:500, finalist:300, semi:180, quarter:90, r1:20}, fee:2000, color:'#4C7A5B' },
+  { id:'250', label:'Copa 250', short:'250', points:{champion:250, finalist:150, semi:90, quarter:45, r1:10}, fee:1000, color:'#6C8B76' },
 ];
 const ROLE_LABELS = { champion:'Campeón', finalist:'Finalista', semi:'Semifinalista', quarter:'Cuartos de final', r1:'Primera ronda' };
 
@@ -641,11 +641,34 @@ function tierOf(id){ return TIERS.find(t=>t.id===id); }
 function fmtMoney(n){ return '$' + Math.round(n).toLocaleString('es-CL'); }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-function ruleDescription(){
-  const g = state.matchRules.gamesPerSet;
-  return state.matchRules.format==='bestOf3'
+function ruleDescription(rules){
+  const r = rules || state.matchRules;
+  const g = r.gamesPerSet;
+  return r.format==='bestOf3'
     ? `Los partidos se juegan al mejor de 3 sets; cada set, al mejor de ${g} games.`
     : `Los partidos se juegan a un set corrido: gana quien llegue primero a ${g} games.`;
+}
+function matchRulesFieldsHtml(prefix, rules){
+  const r = rules || state.matchRules;
+  return `
+    <div class="field">
+      <label>Modalidad de partido</label>
+      <select id="${prefix}-format">
+        <option value="single" ${r.format==='single'?'selected':''}>Un set corrido</option>
+        <option value="bestOf3" ${r.format==='bestOf3'?'selected':''}>Mejor de 3 sets</option>
+      </select>
+    </div>
+    <div class="field"><label>Games para ganar un set</label><input type="number" min="1" max="9" id="${prefix}-games" value="${r.gamesPerSet}"></div>`;
+}
+function readMatchRulesFields(prefix){
+  const formatEl = document.getElementById(`${prefix}-format`);
+  const gamesEl = document.getElementById(`${prefix}-games`);
+  const format = formatEl ? formatEl.value : state.matchRules.format;
+  const gamesPerSet = gamesEl ? Math.max(1, Number(gamesEl.value) || 3) : state.matchRules.gamesPerSet;
+  return { format, gamesPerSet };
+}
+function matchRulesOf(t){
+  return (t && t.matchRules) ? t.matchRules : state.matchRules;
 }
 
 // ---------- STORAGE ----------
@@ -1730,15 +1753,15 @@ function openSettingsModal(){
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Reglas y cuotas</h2>
-    <div class="section-sub">Esto aplica a los torneos que crees de aquí en adelante (los ya creados mantienen su cuota y puntos originales).</div>
+    <div class="section-sub">Esto aplica a los torneos que crees de aquí en adelante (los ya creados mantienen su cuota y puntos originales). La modalidad de partido de aquí abajo es solo la que viene preseleccionada al crear un torneo nuevo — en cada torneo la puedes cambiar individualmente.</div>
     <div class="field">
-      <label>Modalidad de partido</label>
+      <label>Modalidad de partido por defecto</label>
       <select id="s-format">
         <option value="single" ${state.matchRules.format==='single'?'selected':''}>Un set corrido</option>
         <option value="bestOf3" ${state.matchRules.format==='bestOf3'?'selected':''}>Mejor de 3 sets</option>
       </select>
     </div>
-    <div class="field"><label>Games para ganar un set</label><input type="number" min="1" max="9" id="s-games" value="${state.matchRules.gamesPerSet}"></div>
+    <div class="field"><label>Games para ganar un set (por defecto)</label><input type="number" min="1" max="9" id="s-games" value="${state.matchRules.gamesPerSet}"></div>
     <h3 style="font-size:16px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Cuotas y puntos por categoría</h3>
     ${tierRows}
     <div class="modal-actions">
@@ -1801,15 +1824,16 @@ function openMatchModal(tid, isDoubles){
     </div>`;
   }).join('') || `<div class="tourn-meta">Sin partidos cargados todavía.</div>`;
 
-  const isBestOf3 = state.matchRules.format==='bestOf3';
-  const maxG = state.matchRules.gamesPerSet;
+  const rules = matchRulesOf(t);
+  const isBestOf3 = rules.format==='bestOf3';
+  const maxG = rules.gamesPerSet;
   const setRow = (n)=>`<div class="field-row"><div class="field"><label>${isBestOf3?`Set ${n} (games)`:'Marcador (games)'}</label><div style="display:flex;gap:6px;align-items:center;"><input type="number" min="0" max="${maxG}" id="m-s${n}a" placeholder="A"><span style="color:var(--muted);">–</span><input type="number" min="0" max="${maxG}" id="m-s${n}b" placeholder="B"></div></div></div>`;
   const addForm = state.isAdmin ? `
     <div class="field-row">
       <div class="field"><label>Lado A</label><select id="m-sideA">${opts}</select></div>
       <div class="field"><label>Lado B</label><select id="m-sideB">${opts}</select></div>
     </div>
-    <div class="section-sub">${ruleDescription()}${isBestOf3?' Deja en blanco los sets que no se jugaron.':''}</div>
+    <div class="section-sub">${ruleDescription(rules)}${isBestOf3?' Deja en blanco los sets que no se jugaron.':''}</div>
     ${setRow(1)}
     ${isBestOf3 ? setRow(2) + setRow(3) : ''}
     <div class="modal-actions">
@@ -1843,7 +1867,8 @@ async function saveMatch(btn, tid, isDoubles){
     if(a==='' && b==='') return null;
     return [a===''?0:Number(a), b===''?0:Number(b)];
   };
-  const sets = (state.matchRules.format==='bestOf3'
+  const rules = matchRulesOf(t);
+  const sets = (rules.format==='bestOf3'
     ? [readSet('m-s1a','m-s1b'), readSet('m-s2a','m-s2b'), readSet('m-s3a','m-s3b')]
     : [readSet('m-s1a','m-s1b')]
   ).filter(s=>s!==null);
@@ -2119,12 +2144,14 @@ function selectTier(tid){
 
 function openTournamentModal(id){
   const editing = id ? state.tournaments.find(t=>t.id===id) : null;
+  const rules = (editing && editing.matchRules) ? editing.matchRules : state.matchRules;
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>${editing?'Editar torneo':'Nuevo torneo'}</h2>
     <div class="field"><label>Nombre del torneo</label><input type="text" id="f-tname" value="${editing?esc(editing.name):''}" placeholder="Ej: Apertura de Verano"></div>
     <div class="field"><label>Fecha</label><input type="date" id="f-tdate" value="${editing?editing.date:''}"></div>
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
+    ${matchRulesFieldsHtml('f', rules)}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="AceApp.saveTournament(this, ${editing?`'${id}'`:'null'})">Guardar</button>
@@ -2135,7 +2162,7 @@ async function saveTournament(btn, id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede crear o editar torneos.'); return; }
   const name = document.getElementById('f-tname').value.trim();
   if(!name){ aceAlert('Ponle un nombre al torneo.'); return; }
-  const data = { name, date: document.getElementById('f-tdate').value, tier: document.getElementById('f-tier').value };
+  const data = { name, date: document.getElementById('f-tdate').value, tier: document.getElementById('f-tier').value, matchRules: readMatchRulesFields('f') };
   await withLoading(btn, 'Guardando...', async () => {
     if(id){
       Object.assign(state.tournaments.find(t=>t.id===id), data);
@@ -2288,12 +2315,14 @@ async function saveResults(btn, tid){
 // ---- doubles modals ----
 function openDoublesModal(id){
   const editing = id ? state.doubles.find(t=>t.id===id) : null;
+  const rules = (editing && editing.matchRules) ? editing.matchRules : state.matchRules;
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>${editing?'Editar torneo de dobles':'Nuevo torneo de dobles'}</h2>
     <div class="field"><label>Nombre del torneo</label><input type="text" id="f-dname" value="${editing?esc(editing.name):''}" placeholder="Ej: Copa Dobles Otoño"></div>
     <div class="field"><label>Fecha</label><input type="date" id="f-ddate" value="${editing?editing.date:''}"></div>
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
+    ${matchRulesFieldsHtml('d', rules)}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="AceApp.saveDoublesTournament(this, ${editing?`'${id}'`:'null'})">Guardar</button>
@@ -2304,7 +2333,7 @@ async function saveDoublesTournament(btn, id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede crear o editar torneos de dobles.'); return; }
   const name = document.getElementById('f-dname').value.trim();
   if(!name){ aceAlert('Ponle un nombre al torneo.'); return; }
-  const data = { name, date: document.getElementById('f-ddate').value, tier: document.getElementById('f-tier').value };
+  const data = { name, date: document.getElementById('f-ddate').value, tier: document.getElementById('f-tier').value, matchRules: readMatchRulesFields('d') };
   await withLoading(btn, 'Guardando...', async () => {
     if(id){
       Object.assign(state.doubles.find(t=>t.id===id), data);
@@ -2601,8 +2630,9 @@ function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
   const p1Name = labelOf(match.p1);
   const p2Name = labelOf(match.p2);
 
-  const isBestOf3 = state.matchRules.format === 'bestOf3';
-  const maxG = state.matchRules.gamesPerSet;
+  const rules = matchRulesOf(t);
+  const isBestOf3 = rules.format === 'bestOf3';
+  const maxG = rules.gamesPerSet;
 
   const setRow = (n) => `
     <div class="field-row">
@@ -2673,7 +2703,8 @@ async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
     return [a===''?0:Number(a), b===''?0:Number(b)];
   };
 
-  const sets = (state.matchRules.format === 'bestOf3'
+  const rules = matchRulesOf(t);
+  const sets = (rules.format === 'bestOf3'
     ? [readSet('bm-s1a','bm-s1b'), readSet('bm-s2a','bm-s2b'), readSet('bm-s3a','bm-s3b')]
     : [readSet('bm-s1a','bm-s1b')]
   ).filter(s => s !== null);
