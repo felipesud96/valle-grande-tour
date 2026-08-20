@@ -779,6 +779,20 @@ function doublesPointsByPlayer() {
 
   return pts;
 }
+
+  // 2. Games de Partidos Libres en modalidad DOBLES
+  (state.casualMatches || []).forEach(m => {
+    if (m.mode === 'doubles') {
+      let gA = 0, gB = 0;
+      (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
+
+      (m.sideA || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gA; });
+      (m.sideB || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gB; });
+    }
+  });
+
+  return pts;
+}
 function doublesPointsByPlayer(){
   const pts = {};
   state.players.forEach(p => pts[p.id] = 0);
