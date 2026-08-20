@@ -793,26 +793,6 @@ function doublesPointsByPlayer() {
 
   return pts;
 }
-function doublesPointsByPlayer(){
-  const pts = {};
-  state.players.forEach(p => pts[p.id] = 0);
-  state.doubles.filter(t=>t.status==='completed').forEach(t=>{
-    const tier = tierOf(t.tier);
-    if(!tier) return;
-    const assigned = new Set();
-    ['champion','finalist','semi','quarter'].forEach(role=>{
-      (t.results[role]||[]).forEach(pairIdx=>{
-        const pair = t.pairs[pairIdx];
-        if(!pair) return;
-        pair.forEach(pid=>{ pts[pid] = (pts[pid]||0) + tier.points[role]; assigned.add(pid); });
-      });
-    });
-    (t.pairs||[]).forEach(pair=>{
-      pair.forEach(pid=>{ if(!assigned.has(pid)) pts[pid] = (pts[pid]||0) + tier.points.r1; });
-    });
-  });
-  return pts;
-}
 function titlesByPlayer(list, isDoubles){
   const t = {};
   list.filter(x=>x.status==='completed').forEach(x=>{
