@@ -385,6 +385,29 @@
   font-size: 14px;
   margin-left: 8px;
 }
+/* Skeleton loading */
+#ace-app .skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 37%, rgba(255,255,255,0.06) 63%);
+  background-size: 400% 100%;
+  animation: ace-skel-shine 1.4s ease infinite;
+  border-radius: 8px;
+}
+@keyframes ace-skel-shine {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+#ace-app .skel-row { display:flex; align-items:center; gap:14px; padding:12px 0; }
+#ace-app .skel-avatar { width:46px; height:46px; border-radius:50%; flex-shrink:0; }
+#ace-app .skel-line { height:12px; }
+/* Ranking row extras */
+#ace-app .rank-clickable { cursor: pointer; display:flex; align-items:center; gap:12px; flex:1; min-width:0; }
+#ace-app .rank-trend { font-size:11px; font-weight:700; margin-left:4px; }
+#ace-app .rank-trend.up { color:#6C8B76; }
+#ace-app .rank-trend.down { color:#B5502E; }
+#ace-app .rank-trend.flat { color:var(--muted); }
+#ace-app .rank-streak { font-size:11px; margin-left:6px; }
+#ace-app .rank-expiry-warn { font-size:10.5px; color:#D8A34C; display:block; margin-top:2px; }
+#ace-app .rank-h2h-btn { flex-shrink:0; }
 </style>
 
 <div id="ace-app">
@@ -736,11 +759,27 @@ async function save(key, value, shared=true){
   }
 }
 
-// ---------- COMPUTATION ----------
-function singlesPointsByPlayer() {
-  const pts = {};
-  state.players.forEach(p => pts[p.id] = 0);
+// ---------- VENCIMIENTO DE PUNTOS ----------
+const POINTS_VALID_MONTHS = 3;
+const POINTS_WARNING_DAYS = 14;
 
+function addMonthsToDate(dateStr, months){
+  const base = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  const result = new Date(base.getTime());
+  result.setMonth(result.getMonth() + months);
+  return result;
+}
+function pointsExpiryDate(dateStr){
+  return addMonthsToDate(dateStr, POINTS_VALID_MONTHS);
+}
+function isPointsExpired(dateStr){
+  if(!dateStr) return false; // sin fecha: no penalizamos, se cuenta siempre
+  return pointsExpiryDate(dateStr).getTime() < Date.now();
+}
+
+// ---------- COMPUTATION ----------
+function singlesPointEvents() {
+  const events = [];
   // 1. Games de Torneos Individuales
   state.tournaments.forEach(t => {
     if (t.bracket) {
@@ -748,32 +787,34 @@ function singlesPointsByPlayer() {
         if (m.sets && m.p1 && m.p2) {
           let g1 = 0, g2 = 0;
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
-
-          if (pts[m.p1] !== undefined) pts[m.p1] += g1;
-          if (pts[m.p2] !== undefined) pts[m.p2] += g2;
+          events.push({ playerId: m.p1, points: g1, date: t.date, label: t.name });
+          events.push({ playerId: m.p2, points: g2, date: t.date, label: t.name });
         }
       });
     }
   });
-
   // 2. Games de Partidos Libres en modalidad SINGLES
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'singles' || !m.mode) {
       let gA = 0, gB = 0;
       (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
-
-      (m.sideA || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gA; });
-      (m.sideB || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gB; });
+      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: gA, date: m.date, label: 'Partido libre' }));
+      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: gB, date: m.date, label: 'Partido libre' }));
     }
   });
-
+  return events;
+}
+function singlesPointsByPlayer() {
+  const pts = {};
+  state.players.forEach(p => pts[p.id] = 0);
+  singlesPointEvents().forEach(e => {
+    if (pts[e.playerId] !== undefined && !isPointsExpired(e.date)) pts[e.playerId] += e.points;
+  });
   return pts;
 }
 
-function doublesPointsByPlayer() {
-  const pts = {};
-  state.players.forEach(p => pts[p.id] = 0);
-
+function doublesPointEvents() {
+  const events = [];
   // 1. Games de Torneos de Dobles
   state.doubles.forEach(t => {
     if (t.bracket) {
@@ -781,29 +822,64 @@ function doublesPointsByPlayer() {
         if (m.sets && m.p1 && m.p2) {
           let g1 = 0, g2 = 0;
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
-
           const pair1 = t.pairs[Number(m.p1)] || [];
           const pair2 = t.pairs[Number(m.p2)] || [];
-
-          pair1.forEach(pid => { if (pts[pid] !== undefined) pts[pid] += g1; });
-          pair2.forEach(pid => { if (pts[pid] !== undefined) pts[pid] += g2; });
+          pair1.forEach(pid => events.push({ playerId: pid, points: g1, date: t.date, label: t.name }));
+          pair2.forEach(pid => events.push({ playerId: pid, points: g2, date: t.date, label: t.name }));
         }
       });
     }
   });
-
   // 2. Games de Partidos Libres en modalidad DOBLES
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'doubles') {
       let gA = 0, gB = 0;
       (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
-
-      (m.sideA || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gA; });
-      (m.sideB || []).forEach(pid => { if (pts[pid] !== undefined) pts[pid] += gB; });
+      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: gA, date: m.date, label: 'Partido libre' }));
+      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: gB, date: m.date, label: 'Partido libre' }));
     }
   });
-
+  return events;
+}
+function doublesPointsByPlayer() {
+  const pts = {};
+  state.players.forEach(p => pts[p.id] = 0);
+  doublesPointEvents().forEach(e => {
+    if (pts[e.playerId] !== undefined && !isPointsExpired(e.date)) pts[e.playerId] += e.points;
+  });
   return pts;
+}
+
+// Puntos que un jugador está por perder en los próximos POINTS_WARNING_DAYS días.
+function pointsExpiringSoon(playerId, isDoubles){
+  const events = isDoubles ? doublesPointEvents() : singlesPointEvents();
+  const now = Date.now();
+  const warnMs = POINTS_WARNING_DAYS * 24 * 60 * 60 * 1000;
+  let sum = 0, nearest = null;
+  events.forEach(e => {
+    if(e.playerId !== playerId || !e.date || isPointsExpired(e.date)) return;
+    const expiry = pointsExpiryDate(e.date).getTime();
+    if(expiry - now <= warnMs){
+      sum += e.points;
+      if(nearest===null || expiry < nearest) nearest = expiry;
+    }
+  });
+  return sum > 0 ? { points: sum, expiryDate: new Date(nearest) } : null;
+}
+// Tendencia: puntos ganados en los últimos 30 días vs los 30 anteriores.
+function recentPointsTrend(playerId, isDoubles){
+  const events = isDoubles ? doublesPointEvents() : singlesPointEvents();
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  let last30 = 0, prev30 = 0;
+  events.forEach(e => {
+    if(e.playerId !== playerId || !e.date) return;
+    const ageDays = (now - new Date(e.date + 'T00:00:00').getTime()) / day;
+    if(ageDays < 0) return;
+    if(ageDays <= 30) last30 += e.points;
+    else if(ageDays <= 60) prev30 += e.points;
+  });
+  return last30 - prev30;
 }
 
 function titlesByPlayer(list, isDoubles){
@@ -911,6 +987,41 @@ function biggestBlowout(){
   });
   return best;
 }
+function singlesMatchResultsForPlayer(playerId){
+  const results = [];
+  state.tournaments.forEach(t=>{
+    if(t.bracket){
+      t.bracket.flat().forEach(m=>{
+        if(m.winner && (m.p1===playerId || m.p2===playerId) && t.date){
+          results.push({ date: t.date, won: m.winner===playerId, label: t.name });
+        }
+      });
+    }
+  });
+  (state.casualMatches||[]).forEach(m=>{
+    if(m.mode==='doubles' || !m.date) return;
+    const inA = (m.sideA||[]).includes(playerId);
+    const inB = (m.sideB||[]).includes(playerId);
+    if(!inA && !inB) return;
+    const winner = matchWinnerSide(m);
+    if(!winner) return;
+    const won = (inA && winner==='A') || (inB && winner==='B');
+    results.push({ date: m.date, won, label: 'Partido libre' });
+  });
+  return results.sort((a,b)=>a.date.localeCompare(b.date));
+}
+// Racha actual: positiva = victorias seguidas, negativa = derrotas seguidas.
+function currentStreak(playerId){
+  const results = singlesMatchResultsForPlayer(playerId);
+  if(results.length===0) return 0;
+  const lastWon = results[results.length-1].won;
+  let streak = 0;
+  for(let i=results.length-1;i>=0;i--){
+    if(results[i].won===lastWon) streak++; else break;
+  }
+  return lastWon ? streak : -streak;
+}
+
 function headToHeadRecord(idA, idB){
   const matches = allSinglesMatches().filter(m=>{
     const a = m.sideA[0], b = m.sideB[0];
@@ -943,6 +1054,41 @@ function shuffleArray(arr){
     [a[i],a[j]] = [a[j],a[i]];
   }
   return a;
+}
+function shareTournament(tid, isDoubles){
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  if(!t) return;
+  const tier = tierOf(t.tier);
+  let text = `🎾 ${t.name} (${tier ? tier.short : ''})\n${t.date || ''}\n\n`;
+
+  if(t.status === 'completed'){
+    const champLabel = isDoubles
+      ? (t.results.champion||[]).map(idx => (t.pairs[idx]||[]).map(playerName).join(' / ')).join(', ')
+      : (t.results.champion||[]).map(playerName).join(', ');
+    const finalLabel = isDoubles
+      ? (t.results.finalist||[]).map(idx => (t.pairs[idx]||[]).map(playerName).join(' / ')).join(', ')
+      : (t.results.finalist||[]).map(playerName).join(', ');
+    text += `🏆 Campeón: ${champLabel || '—'}\n`;
+    if(finalLabel) text += `🥈 Finalista: ${finalLabel}\n`;
+  } else if(t.bracket && t.bracket.length){
+    t.bracket.forEach(round=>{
+      round.forEach(m=>{
+        const n1 = isDoubles ? (m.p1!=null ? (t.pairs[Number(m.p1)]||[]).map(playerName).join(' / ') : 'BYE') : (m.p1 ? playerName(m.p1) : 'BYE');
+        const n2 = isDoubles ? (m.p2!=null ? (t.pairs[Number(m.p2)]||[]).map(playerName).join(' / ') : 'BYE') : (m.p2 ? playerName(m.p2) : 'BYE');
+        text += `${n1} vs ${n2}${m.scoreLine ? ' · ' + m.scoreLine : ''}\n`;
+      });
+    });
+  } else {
+    const names = isDoubles ? (t.pairs||[]).map(pair=>pair.map(playerName).join(' / ')) : (t.participants||[]).map(playerName);
+    text += 'Inscritos: ' + (names.join(', ') || '—') + '\n';
+  }
+
+  if(navigator.share){
+    navigator.share({ title: t.name, text }).catch(()=>{});
+  } else {
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
 }
 function drawHtml(t, isDoubles){
   if(!t.bracket || t.bracket.length===0) return '';
@@ -1215,6 +1361,16 @@ function rankingEvolutionSvg(){
     <div style="margin-top:8px;">${legend}</div>
   </div>`;
 }
+function trendBadgeHtml(delta){
+  if(delta > 0) return `<span class="rank-trend up">▲${delta}</span>`;
+  if(delta < 0) return `<span class="rank-trend down">▼${Math.abs(delta)}</span>`;
+  return `<span class="rank-trend flat">–</span>`;
+}
+function streakBadgeHtml(streak){
+  if(streak >= 2) return `<span class="rank-streak">🔥 ${streak} seguidas</span>`;
+  if(streak <= -2) return `<span class="rank-streak" style="color:var(--muted);">📉 ${Math.abs(streak)} seguidas</span>`;
+  return '';
+}
 function viewRanking(){
   const list = singlesRankingList();
   if(state.players.length===0){
@@ -1224,13 +1380,20 @@ function viewRanking(){
   const rows = list.map((r,i)=>{
     const p = playerById(r.id);
     const topClass = i===0?'top1':(i===1?'top2':(i===2?'top3':''));
+    const trend = recentPointsTrend(r.id, false);
+    const streak = currentStreak(r.id);
+    const expiring = pointsExpiringSoon(r.id, false);
     return `<div class="rank-row ${topClass}">
       <div class="rank-pos">${i+1}</div>
-      ${playerAvatarHtml(p,46)}
-      <div class="rank-name-block">
-        <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''}</span>
-        <span class="rank-meta">${(titlesByPlayer(state.tournaments,false)[r.id]||0)} título(s) · ${p?playerMetaShort(p):''}</span>
+      <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
+        ${playerAvatarHtml(p,46)}
+        <div class="rank-name-block">
+          <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(trend)}</span>
+          <span class="rank-meta">${(titlesByPlayer(state.tournaments,false)[r.id]||0)} título(s) · ${p?playerMetaShort(p):''} ${streakBadgeHtml(streak)}</span>
+          ${expiring ? `<span class="rank-expiry-warn">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')}</span>` : ''}
+        </div>
       </div>
+      <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">🤝</button>
       <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
     </div>`;
   }).join('');
@@ -1238,11 +1401,11 @@ function viewRanking(){
   return `<div class="section-head">
     <h2>Ranking individual</h2>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">+ Anotar Partido Libre</button>
+      ${state.isAdmin ? `<button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">+ Anotar Partido Libre</button>` : ''}
       <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">🤝 Cara a cara</button>
     </div>
   </div>
-  <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres.</div>
+  <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres. Los puntos de cada partido valen por ${POINTS_VALID_MONTHS} meses desde la fecha en que se jugó; luego de eso, dejan de contar y hay que salir a defenderlos.</div>
   ${rankingEvolutionSvg()}
   <div class="rank-table">${rows}</div>
   ${casualMatchesListHtml('singles')}`;
@@ -1303,6 +1466,9 @@ function viewTournaments(){
       <div class="tourn-body">
         ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
         ${!isDone ? drawHtml(t, false) : ''}
+        <div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', false)">📤 Compartir</button>
+        </div>
         ${adminActions}
       </div>
     </div>`;
@@ -1385,8 +1551,9 @@ function viewDoubles(){
       <div class="rank-pos">${i+1}</div>
       ${playerAvatarHtml(p,46)}
       <div class="rank-name-block">
-        <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''}</span>
+        <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(recentPointsTrend(r.id, true))}</span>
         <span class="rank-meta">Ranking de dobles</span>
+        ${(()=>{ const exp = pointsExpiringSoon(r.id, true); return exp ? `<span class="rank-expiry-warn">⚠️ ${exp.points} pts vencen el ${exp.expiryDate.toLocaleDateString('es-CL')}</span>` : ''; })()}
       </div>
       <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
     </div>`;
@@ -1411,6 +1578,9 @@ function viewDoubles(){
      <div class="tourn-body">
           ${isDone ? podiumHtml(t, true) : `<div>${pairsHtml || '<span class="tourn-meta">Sin parejas aún.</span>'}</div>`}
           ${!isDone ? drawHtml(t, true) : ''}
+          <div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', true)">📤 Compartir</button>
+          </div>
           ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
             ${!isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPairsModal('${t.id}')">Parejas</button>
             ${(t.pairs||[]).length>=2 ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.drawBracket('${t.id}', true)">🎲 Sortear cuadro</button>` : ''}`:''}
@@ -1971,6 +2141,7 @@ function toggleCasualMode(mode){
   if(b2) b2.style.display = show ? '' : 'none';
 }
 function openCasualMatchModal() {
+  if (!state.isAdmin) { aceAlert('Solo el administrador puede anotar partidos libres.'); return; }
   if (state.players.length < 2) { 
     aceAlert('Se necesitan al menos 2 jugadores registrados.'); 
     return; 
@@ -2025,6 +2196,7 @@ function openCasualMatchModal() {
 }
 
 async function saveCasualMatch(btn) {
+  if (!state.isAdmin) { aceAlert('Solo el administrador puede anotar partidos libres.'); return; }
   const mode = document.getElementById('cm-mode').value;
   const a1 = document.getElementById('cm-a1').value;
   const b1 = document.getElementById('cm-b1').value;
@@ -2084,10 +2256,27 @@ async function saveCasualMatch(btn) {
     </div>
   </div>`;
 }
+const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function monthLabelEs(ym){
+  if(!ym || ym==='sin-fecha') return 'Sin fecha';
+  const [y,m] = ym.split('-');
+  const name = MONTH_NAMES_ES[Number(m)-1] || '';
+  return `${name.charAt(0).toUpperCase()+name.slice(1)} ${y}`;
+}
 function casualMatchesListHtml(mode){
   const matches = (state.casualMatches || []).filter(m => mode === 'doubles' ? m.mode === 'doubles' : (m.mode !== 'doubles'));
   if(matches.length === 0) return '';
-  const rows = [...matches].reverse().map(casualMatchesRowHtml).join('');
+  const sorted = [...matches].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const groups = {};
+  sorted.forEach(m=>{
+    const key = (m.date||'').slice(0,7) || 'sin-fecha';
+    (groups[key] = groups[key] || []).push(m);
+  });
+  const groupKeys = Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  const rows = groupKeys.map(k => `
+    <div class="tourn-meta" style="margin:16px 0 4px;text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--muted);">${monthLabelEs(k)}</div>
+    ${groups[k].map(casualMatchesRowHtml).join('')}
+  `).join('');
   const title = mode === 'doubles' ? '🎾 Historial de Partidos Libres · Dobles' : '🎾 Historial de Partidos Libres · Singles';
 
   return `<div class="card" style="margin-top:26px;">
@@ -2107,16 +2296,16 @@ async function deleteCasualMatch(matchId){
   aceAlert('Partido libre eliminado.');
 }
 // ---- head to head modal ----
-function openH2HModal(){
+function openH2HModal(preId){
   if(state.players.length<2){ aceAlert('Necesitas al menos 2 jugadores para comparar.'); return; }
-  const opts = state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const optsFor = (selId) => state.players.map(p=>`<option value="${p.id}" ${selId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Cara a cara</h2>
     <div class="section-sub">Elige dos jugadores para ver su historial de partidos individuales con marcador cargado.</div>
     <div class="field-row">
-      <div class="field"><label>Jugador A</label><select id="h2h-a">${opts}</select></div>
-      <div class="field"><label>Jugador B</label><select id="h2h-b">${opts}</select></div>
+      <div class="field"><label>Jugador A</label><select id="h2h-a">${optsFor(preId)}</select></div>
+      <div class="field"><label>Jugador B</label><select id="h2h-b">${optsFor(null)}</select></div>
     </div>
     <button class="btn btn-primary btn-sm" onclick="AceApp.showH2H()">Ver historial</button>
     <div id="h2h-result" style="margin-top:14px;"></div>
@@ -2138,6 +2327,71 @@ function showH2H(){
     <div class="disp" style="font-size:26px;text-align:center;margin-bottom:4px;color:var(--ball);">${rec.winsA} — ${rec.winsB}</div>
     <div class="tourn-meta" style="text-align:center;margin-bottom:12px;">${esc(playerName(idA))} vs ${esc(playerName(idB))}</div>
     <div class="podium">${rows}</div>`;
+}
+
+function openPlayerProfileModal(playerId){
+  const p = playerById(playerId);
+  if(!p) return;
+  const pts = singlesPointsByPlayer()[playerId] || 0;
+  const rankList = singlesRankingList();
+  const pos = rankList.findIndex(r=>r.id===playerId) + 1;
+  const results = singlesMatchResultsForPlayer(playerId);
+  const wins = results.filter(r=>r.won).length;
+  const losses = results.length - wins;
+  const streak = currentStreak(playerId);
+  const expiring = pointsExpiringSoon(playerId, false);
+  const titles = (titlesByPlayer(state.tournaments,false)[playerId]) || 0;
+
+  // Rival más jugado y set más ajustado, en base a los partidos de torneo con marcador cargado.
+  const rivalCount = {};
+  let closest = null;
+  allSinglesMatches().forEach(m=>{
+    const a = (m.sideA||[])[0], b = (m.sideB||[])[0];
+    if(a!==playerId && b!==playerId) return;
+    const rival = a===playerId ? b : a;
+    if(rival) rivalCount[rival] = (rivalCount[rival]||0) + 1;
+    (m.sets||[]).forEach(s=>{
+      if(!s || s[0]==null || s[1]==null) return;
+      const diff = Math.abs(Number(s[0]) - Number(s[1]));
+      if(!closest || diff < closest.diff){
+        closest = { diff, score: `${s[0]}-${s[1]}`, rival, tournamentName: m.tournamentName };
+      }
+    });
+  });
+  let topRival = null, topRivalCount = 0;
+  Object.entries(rivalCount).forEach(([id,c])=>{ if(c>topRivalCount){ topRivalCount=c; topRival=id; } });
+
+  const recentRows = results.slice(-8).reverse().map(r=>`
+    <div class="podium-row" style="padding:8px 0;">
+      <span>${r.date} · ${esc(r.label)}</span>
+      <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✅ Victoria':'❌ Derrota'}</span>
+    </div>`).join('');
+
+  const html = `
+    <button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
+      ${playerAvatarHtml(p,56)}
+      <div>
+        <h2 style="margin:0;">${esc(p.name)}</h2>
+        ${p.alias?`<div style="color:var(--ball);font-style:italic;font-size:13.5px;">"${esc(p.alias)}"</div>`:''}
+        <div class="tourn-meta">${pos?`#${pos} del ranking individual`:'Sin ranking todavía'} · ${pts} pts</div>
+      </div>
+    </div>
+    ${expiring ? `<div class="section-sub" style="color:#D8A34C;">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')} si no suma más antes de esa fecha.</div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0;">
+      <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:22px;">${wins}-${losses}</div><div class="tourn-meta">Récord (V-D)</div></div>
+      <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:22px;">${titles}</div><div class="tourn-meta">Título(s)</div></div>
+      <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:18px;">${streak>=2?'🔥 '+streak:(streak<=-2?'📉 '+Math.abs(streak):'—')}</div><div class="tourn-meta">Racha actual</div></div>
+      <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:14px;">${topRival?esc(playerName(topRival)):'—'}</div><div class="tourn-meta">Rival más jugado${topRival?` (${topRivalCount}×)`:''}</div></div>
+    </div>
+    ${closest ? `<div class="section-sub">🎯 Set más ajustado: ${closest.score} vs ${esc(playerName(closest.rival))} (${esc(closest.tournamentName)})</div>` : ''}
+    <h3 style="font-size:15px;margin:14px 0 6px;color:var(--chalk);">Historial reciente</h3>
+    <div class="podium">${recentRows || '<div class="tourn-meta">Sin partidos con marcador todavía.</div>'}</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal('${playerId}')">🤝 Cara a cara</button>
+      <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button>
+    </div>`;
+  openModal(html);
 }
 
 function openIdentityModal(){
@@ -2807,7 +3061,7 @@ window.AceApp = {
   openIdentityModal, setIdentity,
   openAdminModal, checkAdminPin, setAdminPin, exitAdmin, resetAdminPin,
   downloadBackup, triggerRestore, handleRestoreFile, __resolveConfirm,
-  openMatchModal, saveMatch, deleteMatch, openH2HModal, showH2H, drawBracket,
+  openMatchModal, saveMatch, deleteMatch, openH2HModal, showH2H, drawBracket, openPlayerProfileModal, shareTournament,
   openSettingsModal, saveSettings,
   openTournamentModal, saveTournament, deleteTournament, selectTier,
   openParticipantsModal, saveParticipants, openResultsModal, saveResults,
@@ -2820,8 +3074,20 @@ window.AceApp = {
 };
 
 // ---------- INIT ----------
+function rankingSkeletonHtml(){
+  const row = `<div class="skel-row">
+    <div class="skeleton skel-avatar"></div>
+    <div style="flex:1;">
+      <div class="skeleton skel-line" style="width:55%;margin-bottom:8px;"></div>
+      <div class="skeleton skel-line" style="width:35%;height:9px;"></div>
+    </div>
+    <div class="skeleton skel-line" style="width:40px;"></div>
+  </div>`;
+  return `<div class="section-head"><div class="skeleton skel-line" style="width:180px;height:22px;"></div></div>
+  <div class="rank-table">${row.repeat(6)}</div>`;
+}
 function bootApp(){
-  document.getElementById('section-content').innerHTML = '<div class="empty">Cargando circuito…</div>';
+  document.getElementById('section-content').innerHTML = rankingSkeletonHtml();
   seedIfEmpty().then(() => loadAll()).then(render).catch(err => {
     console.error('Error al iniciar el circuito:', err);
     document.getElementById('section-content').innerHTML =
