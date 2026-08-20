@@ -2084,17 +2084,23 @@ async function saveParticipants(tid){
 
 function openResultsModal(tid){
   const t = state.tournaments.find(x=>x.id===tid);
-  if((t.participants||[]).length===0){ aceAlert('Primero agrega inscritos a este torneo.'); return; }
+  const count = (t.participants||[]).length;
+  if(count===0){ aceAlert('Primero agrega inscritos a este torneo.'); return; }
+  
   const opts = t.participants.map(pid=>`<option value="${pid}">${esc(playerName(pid))}</option>`).join('');
   const multiCheck = (role) => t.participants.map(pid=>`<label class="check-item"><input type="checkbox" data-role="${role}" value="${pid}" ${(t.results[role]||[]).includes(pid)?'checked':''}> ${esc(playerName(pid))}</label>`).join('');
+  
+  const showSemi = count >= 4 ? `<div class="field"><label>Semifinalistas</label><div class="check-list">${multiCheck('semi')}</div></div>` : '';
+  const showQuarter = count >= 8 ? `<div class="field"><label>Cuartos de final</label><div class="check-list">${multiCheck('quarter')}</div></div>` : '';
+
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Resultados</h2>
     <div class="section-sub" style="margin-bottom:14px;">Quien no quede marcado en ningún cuadro recibe puntos de primera ronda.</div>
     <div class="field"><label>Campeón</label><select id="r-champion"><option value="">—</option>${opts}</select></div>
     <div class="field"><label>Finalista</label><select id="r-finalist"><option value="">—</option>${opts}</select></div>
-    <div class="field"><label>Semifinalistas</label><div class="check-list">${multiCheck('semi')}</div></div>
-    <div class="field"><label>Cuartos de final</label><div class="check-list">${multiCheck('quarter')}</div></div>
+    ${showSemi}
+    ${showQuarter}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="AceApp.saveResults(this, '${tid}')">Finalizar torneo</button>
