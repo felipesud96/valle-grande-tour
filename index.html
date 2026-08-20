@@ -1227,8 +1227,15 @@ function viewRanking(){
       <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
     </div>`;
   }).join('');
-  return `<div class="section-head"><h2>Ranking individual</h2><button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">🤝 Cara a cara</button></div>
-  <div class="section-sub">Puntos acumulados en torneos de individuales completados.</div>
+
+  return `<div class="section-head">
+    <h2>Ranking individual</h2>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">+ Anotar Partido Libre</button>
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">🤝 Cara a cara</button>
+    </div>
+  </div>
+  <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres.</div>
   ${rankingEvolutionSvg()}
   <div class="rank-table">${rows}</div>`;
 }
