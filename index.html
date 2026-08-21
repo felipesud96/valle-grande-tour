@@ -5114,6 +5114,10 @@ function issueChallenge(toId) {
   // Sugerir la fecha de hoy por defecto
   const today = new Date().toISOString().split('T')[0];
 
+  // 1. Eliminar el modal anterior si quedó alguno pegado
+  const existingModal = document.getElementById('challenge-modal');
+  if (existingModal) existingModal.remove();
+
   const html = `
     <div class="overlay" id="challenge-modal">
       <div class="modal">
@@ -5130,9 +5134,10 @@ function issueChallenge(toId) {
       </div>
     </div>
   `;
-  document.body.insertAdjacentHTML('beforeend', html);
+  
+  // 2. ¡EL TRUCO ESTÁ AQUÍ! Insertarlo dentro de 'ace-app' para que tome los colores y diseño.
+  document.getElementById('ace-app').insertAdjacentHTML('beforeend', html);
 }
-
 async function confirmChallenge(toId) {
   const dateVal = document.getElementById('challenge-date-input').value;
   if (!dateVal) return aceAlert("Debes seleccionar una fecha.");
