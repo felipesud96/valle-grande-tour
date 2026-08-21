@@ -3603,15 +3603,27 @@ function showH2H(){
   const idA = document.getElementById('h2h-a').value;
   const idB = document.getElementById('h2h-b').value;
   const el = document.getElementById('h2h-result');
-  if(idA===idB){ el.innerHTML = '<div class="tourn-meta">Elige dos jugadores distintos.</div>'; return; }
+  
+  if (idA === idB) { 
+    el.innerHTML = '<div class="tourn-meta">Elige dos jugadores distintos.</div>'; 
+    return; 
+  }
+
+  const pA = playerById(idA);
+  const pB = playerById(idB);
+  const radarHtml = generateRadarSvg(pA, pB);
   const rec = headToHeadRecord(idA, idB);
-  if(rec.matches.length===0){
-    el.innerHTML = `<div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
+
+  if (rec.matches.length === 0) {
+    el.innerHTML = radarHtml + `<div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
     return;
   }
-  const rows = rec.matches.map(m=>`<div class="podium-row"><span>${esc(m.tournamentName)} ${m.date?'· '+m.date:''}</span><span>${esc(m.scoreline)}${m.winnerId?` · gana ${esc(playerName(m.winnerId))}`:''}</span></div>`).join('');
+
+  const rows = rec.matches.map(m => `<div class="podium-row"><span>${esc(m.tournamentName)} ${m.date ? '· ' + m.date : ''}</span><span>${esc(m.scoreline)}${m.winnerId ? ` · gana ${esc(playerName(m.winnerId))}` : ''}</span></div>`).join('');
+  
   el.innerHTML = `
-    <div class="disp" style="font-size:26px;text-align:center;margin-bottom:4px;color:var(--ball);">${rec.winsA} — ${rec.winsB}</div>
+    ${radarHtml}
+    <div class="disp" style="font-size:26px;text-align:center;margin-bottom:4px;color:var(--ball);">${rec.winsA} - ${rec.winsB}</div>
     <div class="tourn-meta" style="text-align:center;margin-bottom:12px;">${esc(playerName(idA))} vs ${esc(playerName(idB))}</div>
     <div class="podium">${rows}</div>`;
 }
