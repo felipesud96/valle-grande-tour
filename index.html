@@ -1454,6 +1454,23 @@ function autoBadges(playerId){
   if(blowout && blowout.diff>=3 && blowout.winnerId===playerId){
     badges.push({e:'💥', t:'La paliza del circuito'});
   }
+  const sentCount = (state.challenges || []).filter(c => c.fromId === playerId).length;
+  const receivedCount = (state.challenges || []).filter(c => c.toId === playerId).length;
+
+  let maxSent = 0, maxReceived = 0;
+  state.players.forEach(p => {
+    const s = (state.challenges || []).filter(c => c.fromId === p.id).length;
+    const r = (state.challenges || []).filter(c => c.toId === p.id).length;
+    if (s > maxSent) maxSent = s;
+    if (r > maxReceived) maxReceived = r;
+  });
+
+  if (sentCount >= 2 && sentCount === maxSent) {
+    badges.push({ e: '⚔️', t: 'El Más Desafiante' });
+  }
+  if (receivedCount >= 2 && receivedCount === maxReceived) {
+    badges.push({ e: '🎯', t: 'El Más Desafiado' });
+  }
   return badges;
 }
 
