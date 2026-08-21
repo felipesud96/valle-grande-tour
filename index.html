@@ -1535,6 +1535,7 @@ function renderAdmin(){
     el.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="AceApp.openAdminModal()">🔒 Modo administrador</button>`;
   }
 }
+let lastRenderedTab = null;
 
 function render() {
     renderTabs();
@@ -1558,16 +1559,19 @@ function render() {
         stats: viewStats
     };
 
-    // 1. Inyectar contenido
+    // Inyectar contenido
     const viewFn = views[state.tab];
     if (viewFn) {
         el.innerHTML = viewFn();
     }
 
-    // 2. Reiniciar animación CSS
-    el.classList.remove('fade-tab');
-    void el.offsetWidth; // Reflow para reiniciar animación
-    el.classList.add('fade-tab');
+    // Solo animar si la pestaña cambió de verdad (elimina el parpadeo)
+    if (lastRenderedTab !== state.tab) {
+        el.classList.remove('fade-tab');
+        void el.offsetWidth; // Reflow para reiniciar animación
+        el.classList.add('fade-tab');
+        lastRenderedTab = state.tab;
+    }
 }
 
 // ---------- VIEW: RANKING ----------
