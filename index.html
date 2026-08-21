@@ -3627,7 +3627,62 @@ function showH2H(){
     <div class="tourn-meta" style="text-align:center;margin-bottom:12px;">${esc(playerName(idA))} vs ${esc(playerName(idB))}</div>
     <div class="podium">${rows}</div>`;
 }
+function generateMatchCardHtml(match) {
+  const p1 = playerById(match.p1Id || match.player1Id);
+  const p2 = playerById(match.p2Id || match.player2Id);
+  const winner = playerById(match.winnerId);
+  
+  const textSummary = `🎾 *RESULTADO CIRCUITO ACE* 🎾\n\n🏆 *Ganador:* ${winner ? winner.name : 'N/A'}\n⚔️ ${p1 ? p1.name : 'P1'} vs ${p2 ? p2.name : 'P2'}\n📊 *Marcador:* ${match.scoreline}\n📅 *Fecha:* ${match.date || 'Reciente'}\n\n¡Seguimos sumando en el ranking! 🚀`;
 
+  return `
+    <div id="match-card-export" style="background:var(--court);border:2px solid var(--ball);border-radius:12px;padding:16px;color:var(--chalk);max-width:340px;margin:10px auto;text-align:center;">
+      <div style="font-size:11px;letter-spacing:1px;color:var(--ball);text-transform:uppercase;font-weight:700;">Circuito Ace · Resultado Oficial</div>
+      <div style="font-size:20px;font-weight:800;margin:10px 0;color:#fff;">${esc(match.tournamentName || 'Partido Desafío')}</div>
+      
+      <div style="display:flex;justify-content:space-around;align-items:center;margin:15px 0;">
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;">${esc(p1 ? p1.name : 'Jugador 1')}</div>
+        </div>
+        <div style="font-size:14px;font-weight:900;color:var(--ball);padding:0 8px;">VS</div>
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;">${esc(p2 ? p2.name : 'Jugador 2')}</div>
+        </div>
+      </div>
+
+      <div style="background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;font-size:18px;font-weight:800;color:var(--ball);letter-spacing:2px;margin-bottom:12px;">
+        ${esc(match.scoreline)}
+      </div>
+
+      <button class="btn btn-ball btn-sm" style="width:100%;margin-top:8px;" onclick="navigator.clipboard.writeText(\`${textSummary}\`); aceAlert('¡Resumen copiado al portapapeles para WhatsApp! 📲');">
+        📲 Copiar para WhatsApp
+      </button>
+    </div>
+  `;
+}
+
+function openMatchCardModal(matchId) {
+  let match = null;
+  // Buscar en partidos libres
+  if (state.casualMatches) match = state.casualMatches.find(m => m.id === matchId);
+  
+  // Buscar en torneos
+  if (!match && state.tournaments) {
+    state.tournaments.forEach(t => {
+      if (t.matches) {
+        const found = t.matches.find(m => m.id === matchId);
+        if (found) match = { ...found, tournamentName: t.name };
+      }
+    });
+  }
+
+  if (!match) return aceAlert("No se encontró el partido.");
+
+  const html = `
+    <button class="close-x" onclick="AceApp.closeModal()">×</button>
+    ${generateMatchCardHtml(match)}
+  `;
+  openModal(html);
+}
 function openPlayerProfileModal(playerId){
   const p = playerById(playerId);
   if(!p) return;
