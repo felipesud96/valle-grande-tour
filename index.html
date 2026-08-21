@@ -4791,20 +4791,24 @@ async function issueChallenge(toPlayerId) {
   if (state.myPlayerId === toPlayerId) return aceAlert("No puedes desafiarte a ti mismo.");
   
   const toName = playerName(toPlayerId);
-  if(!confirm(`¿Estás seguro de enviar un desafío oficial a ${toName}?`)) return;
+  const defaultDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const challengeDate = prompt(`¿Para qué fecha propones el partido con ${toName}? (AAAA-MM-DD):`, defaultDate);
+  if (!challengeDate) return;
   
   const newChallenge = {
     id: uid(),
     fromId: state.myPlayerId,
     toId: toPlayerId,
     status: 'pending',
-    date: new Date().toISOString().split('T')[0]
+    date: challengeDate,
+    notifiedTo: false,
+    notifiedFrom: true
   };
   
   state.challenges.push(newChallenge);
   await save('challenges', state.challenges);
   render();
-  aceAlert(`¡Desafío enviado a ${toName} con éxito! ⚔️`);
+  aceAlert(`¡Desafío enviado a ${toName} para el ${challengeDate}! ⚔️`);
 }
 
 async function updateChallengeStatus(challengeId, newStatus) {
