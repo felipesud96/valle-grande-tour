@@ -1175,18 +1175,23 @@ function drawHtml(t, isDoubles){
          // Evento temporal: En el paso 4 crearemos el modal para editar el resultado al hacer clic
 const clickAttr = (isPlayable && state.isAdmin) ? `onclick="AceApp.openBracketMatchModal('${t.id}', ${isDoubles}, ${rIdx}, ${mIdx})"` : '';                  
          html += `
-         <div class="bracket-match" ${clickAttr}>
-             <div class="bracket-player-row ${isWinner1 ? 'winner' : (m.winner ? 'loser' : '')}">
-                 <span class="bp-name">${esc(p1Name)}</span>
-                 ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
-                 ${isWinner1 ? '<span class="bp-check">✓</span>' : ''}
-             </div>
-             <div class="bracket-player-row ${isWinner2 ? 'winner' : (m.winner ? 'loser' : '')}">
-                 <span class="bp-name">${esc(p2Name)}</span>
-                 ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
-                 ${isWinner2 ? '<span class="bp-check">✓</span>' : ''}
-             </div>
-         </div>`;
+  <div class="bracket-match" ${clickAttr}>
+    <div class="bracket-player-row ${isWinner1 ? 'winner' : (m.winner ? 'loser' : '')}">
+      <span class="bp-name">${esc(p1Name)}</span>
+      ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
+      ${isWinner1 ? '<span class="bp-check">✓</span>' : ''}
+    </div>
+    <div class="bracket-player-row ${isWinner2 ? 'winner' : (m.winner ? 'loser' : '')}">
+      <span class="bp-name">${esc(p2Name)}</span>
+      ${m.scoreLine ? `<span class="bp-score">${m.scoreLine}</span>` : ''}
+      ${isWinner2 ? '<span class="bp-check">✓</span>' : ''}
+    </div>
+    ${(m.winner || m.scoreLine) && m.id ? `
+      <div style="text-align:right; margin-top:4px;">
+        <button class="btn btn-ghost" style="font-size:10px; padding:2px 6px; height:auto; min-height:0;" onclick="event.stopPropagation(); AceApp.openMatchCardModal('${m.id}')">📲 Tarjeta</button>
+      </div>
+    ` : ''}
+  </div>`;
      });
      html += '</div>';
   });
