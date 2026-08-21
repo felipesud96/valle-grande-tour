@@ -1819,8 +1819,303 @@ function viewDoubles(){
   ${liveMatchesBannerHtml()}
   <div class="rank-table" style="margin-bottom:30px;">${rankHtml}</div>
   ${head}${tournHtml}
-  ${casualMatchesListHtml('doubles')}`;
+  ${casualMatchesListHtml('doubles')}
+  ${doublesAchievementsSectionHtml()}`;
 }
+
+function doublesAchievementsSectionHtml(){
+  const umpiredCount = allUmpiredDoublesMatches().length;
+  return `
+  <h3 style="font-size:18px;margin:30px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Títulos de liga · Dobles (por pareja 👑)</h3>
+  <div class="section-sub" style="margin-top:-4px;">Se premia a la pareja como equipo, nunca a un jugador suelto — el umpire no distingue quién de los dos tocó cada pelota.</div>
+  ${pairTitlesSectionHtml(umpiredCount)}
+  <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias de umpire · Dobles</h3>
+  ${pairBadgesSectionHtml(umpiredCount)}`;
+}
+
+// ==========================================
+// MOTOR DE RACHAS, LOGROS Y TÍTULOS (UMPIRE STATS)
+// ==========================================
+// Todo lo de acá abajo se calcula en base a liveStats.pointLog / gameLog
+// que quedan guardados en cada partido arbitrado en vivo (partidos libres
+// y partidos de torneo/dobles). Los partidos sin liveStats simplemente se
+// ignoran para estas métricas.
+//
+// NOTA DOBLES: el módulo umpire registra el punto por lado (A/B), no por
+// jugador individual dentro de la pareja. Por eso, en dobles, cada punto
+// del lado se acredita a AMBOS integrantes de la pareja por igual.
+
+const PROFILE_ACHIEVEMENTS_DEF = {
+  bombardero:      { e:'💣',  t:'Bombardero',         d:'Anotó 3 o más aces en un mismo juego.' },
+  intocable:       { e:'🧱',  t:'Intocable',          d:'Ganó un juego completo solo con aces y winners.' },
+  inapelable:      { e:'🎯',  t:'Inapelable',         d:'Metió un winner justo después de un ace.' },
+  lluviaGanadores: { e:'🌧️', t:'Lluvia de Ganadores', d:'Registró 10 o más winners en un mismo partido.' },
+  paredConcreto:   { e:'🧊',  t:'Pared de Concreto',  d:'Disputó 15 o más puntos seguidos sin cometer un error no forzado.' },
+  juegoPerfecto:   { e:'✨',  t:'Juego Perfecto',     d:'Ganó un juego sin regalar ningún punto por error no forzado.' },
+  modoZen:         { e:'🧘',  t:'Modo Zen',           d:'Mantuvo su tasa de errores no forzados bajo el 10% durante todo el partido.' },
+  fenix:           { e:'🐦‍🔥', t:'Fénix',              d:'Metió un winner o ace justo después de 2 o más errores no forzados seguidos.' },
+  rompeRachas:     { e:'⛓️',  t:'Rompe-Rachas',       d:'Cortó una racha de 4 o más puntos perdidos con un ace o winner.' },
+  sangreFria:      { e:'❄️',  t:'Sangre Fría',        d:'Selló un quiebre de servicio con un ace o winner.' },
+  dominioTotal:    { e:'⚔️',  t:'Dominio Total',      d:'Terminó un partido con más aces + winners que errores no forzados.' },
+  puntoAPunto:     { e:'🎾',  t:'Punto a Punto',      d:'Ganó el 70% o más de los puntos normales disputados en un partido.' },
+  festivalHits:    { e:'🏹',  t:'Festival de Hits',   d:'Superó los 30 puntos de mérito propio (aces + winners) en un partido.' }
+};
+
+function allUmpiredSinglesMatches(){
+  const out = [];
+  (state.casualMatches||[]).forEach(m=>{ if(m.liveStats && m.mode!=='doubles') out.push(m); });
+  (state.tournaments||[]).forEach(t=>{ (t.bracket||[]).forEach(round=>round.forEach(m=>{ if(m.liveStats) out.push(m); })); });
+  return out;
+}
+function allUmpiredDoublesMatches(){
+  const out = [];
+  (state.casualMatches||[]).forEach(m=>{ if(m.liveStats && m.mode==='doubles') out.push(m); });
+  (state.doubles||[]).forEach(t=>{ (t.bracket||[]).forEach(round=>round.forEach(m=>{ if(m.liveStats) out.push(m); })); });
+  return out;
+}
+// Identificador estable de una pareja de dobles, sin importar el orden en que
+// se guardaron los dos jugadores ni en qué torneo jugaron juntos.
+function pairKeyOf(ids){
+  return [...ids].sort((a,b)=> playerName(a).localeCompare(playerName(b))).join('|');
+}
+function pairLabel(key){
+  return key.split('|').map(playerName).join(' / ');
+}
+
+function groupPointsByGame(pointLog){
+  const map = new Map();
+  (pointLog||[]).forEach(pt=>{
+    const key = pt.setIndex+'_'+pt.gameIndex;
+    if(!map.has(key)) map.set(key, []);
+    map.get(key).push(pt);
+  });
+  return map;
+}
+function gameWinnerMap(gameLog){
+  const map = new Map();
+  (gameLog||[]).forEach(g=> map.set(g.setIndex+'_'+g.gameIndex, g));
+  return map;
+}
+
+// Calcula rachas máximas + logros desbloqueados por UN lado (A/B) en UN partido
+function computeSideMatchStats(liveStats, side){
+  const pointLog = liveStats.pointLog || [];
+  const gLog = liveStats.gameLog || [];
+  const stats = (liveStats.stats && liveStats.stats[side]) ? liveStats.stats[side] : {ace:0,winner:0,unfError:0};
+
+  const cur = { point:0, ace:0, winnerS:0, cleanKill:0, lost:0, cleanRun:0, serveEff:0 };
+  const max = { point:0, ace:0, winnerS:0, cleanKill:0, lost:0, cleanRun:0, serveEff:0 };
+  let ownErrorStreak = 0;
+  const unlocked = {};
+
+  pointLog.forEach(pt=>{
+    const wonByMe = pt.side === side;
+    const isOwnError = (!wonByMe && pt.type==='error');
+    const prevLost = cur.lost; // valor ANTES de actualizar este punto
+
+    cur.point = wonByMe ? cur.point+1 : 0;               max.point = Math.max(max.point, cur.point);
+    cur.lost  = wonByMe ? 0 : cur.lost+1;                 max.lost  = Math.max(max.lost, cur.lost);
+    cur.ace   = (wonByMe && pt.type==='ace') ? cur.ace+1 : 0;         max.ace = Math.max(max.ace, cur.ace);
+    cur.winnerS = (wonByMe && pt.type==='winner') ? cur.winnerS+1 : 0; max.winnerS = Math.max(max.winnerS, cur.winnerS);
+    cur.cleanKill = (wonByMe && (pt.type==='ace'||pt.type==='winner')) ? cur.cleanKill+1 : 0;
+    max.cleanKill = Math.max(max.cleanKill, cur.cleanKill);
+    cur.cleanRun = isOwnError ? 0 : cur.cleanRun+1;       max.cleanRun = Math.max(max.cleanRun, cur.cleanRun);
+    const servingMe = pt.server === side;
+    cur.serveEff = (servingMe && wonByMe) ? cur.serveEff+1 : (servingMe ? 0 : cur.serveEff);
+    max.serveEff = Math.max(max.serveEff, cur.serveEff);
+
+    if (wonByMe && (pt.type==='ace'||pt.type==='winner') && ownErrorStreak>=2) unlocked.fenix = true;
+    if (wonByMe && (pt.type==='ace'||pt.type==='winner') && prevLost>=4) unlocked.rompeRachas = true;
+
+    ownErrorStreak = isOwnError ? ownErrorStreak+1 : 0;
+  });
+
+  // Inapelable: winner justo después de un ace (mismos puntos consecutivos)
+  for(let i=1;i<pointLog.length;i++){
+    if(pointLog[i].side===side && pointLog[i].type==='winner' && pointLog[i-1].side===side && pointLog[i-1].type==='ace'){
+      unlocked.inapelable = true; break;
+    }
+  }
+
+  // Logros por juego: bombardero / intocable / juegoPerfecto / sangreFria
+  const byGame = groupPointsByGame(pointLog);
+  const gWinners = gameWinnerMap(gLog);
+  byGame.forEach((pts, key)=>{
+    const mine = pts.filter(p=>p.side===side);
+    const myAces = mine.filter(p=>p.type==='ace').length;
+    if(myAces>=3) unlocked.bombardero = true;
+
+    const gInfo = gWinners.get(key);
+    const wonThisGame = gInfo && gInfo.winner===side;
+    if(wonThisGame && mine.length>0 && mine.every(p=>p.type==='ace'||p.type==='winner')) unlocked.intocable = true;
+
+    const myOwnErrorsInGame = pts.filter(p=>p.side!==side && p.type==='error').length;
+    if(wonThisGame && myOwnErrorsInGame===0) unlocked.juegoPerfecto = true;
+
+    // Sangre fría: gano el último punto del juego con ace/winner Y el juego fue un quiebre (gané sacando el rival)
+    if(wonThisGame && gInfo && gInfo.server!==side && pts.length>0){
+      const lastPt = pts[pts.length-1];
+      if(lastPt.side===side && (lastPt.type==='ace'||lastPt.type==='winner')) unlocked.sangreFria = true;
+    }
+  });
+
+  if(stats.winner>=10) unlocked.lluviaGanadores = true;
+  if(max.cleanRun>=15) unlocked.paredConcreto = true;
+  if(pointLog.length>=10 && (stats.unfError/pointLog.length) < 0.10) unlocked.modoZen = true;
+  if((stats.ace+stats.winner) > stats.unfError && (stats.ace+stats.winner)>0) unlocked.dominioTotal = true;
+  const normalTotal = pointLog.filter(p=>p.type==='normal').length;
+  const normalMine = pointLog.filter(p=>p.type==='normal' && p.side===side).length;
+  if(normalTotal>=5 && (normalMine/normalTotal)>=0.70) unlocked.puntoAPunto = true;
+  if((stats.ace+stats.winner)>=30) unlocked.festivalHits = true;
+
+  // Games de saque: servidos, mantenidos, quiebres logrados/sufridos
+  let servedGames=0, heldGames=0, breaksAchieved=0, breaksSuffered=0;
+  gLog.forEach(g=>{
+    if(g.server===side){ servedGames++; if(g.winner===side) heldGames++; else breaksSuffered++; }
+    else { if(g.winner===side) breaksAchieved++; }
+  });
+
+  return {
+    ace: stats.ace, winner: stats.winner, unfError: stats.unfError,
+    pointsPlayed: pointLog.length,
+    pointsWon: pointLog.filter(p=>p.side===side).length,
+    normalWon: normalMine, normalTotal,
+    max, servedGames, heldGames, breaksAchieved, breaksSuffered,
+    unlocked
+  };
+}
+
+// Combina las stats de un partido (por lado) en el acumulado de cada jugador participante
+function accumulatePlayerFromSide(agg, playerId, sideStats){
+  if(!agg[playerId]) agg[playerId] = {
+    ace:0, winner:0, unfError:0, pointsPlayed:0, pointsWon:0, normalWon:0, normalTotal:0,
+    servedGames:0, heldGames:0, breaksAchieved:0, breaksSuffered:0,
+    matchesUmpired:0,
+    max: { point:0, ace:0, winnerS:0, cleanKill:0, lost:0, cleanRun:0, serveEff:0 },
+    unlocked: {}
+  };
+  const a = agg[playerId];
+  a.ace += sideStats.ace; a.winner += sideStats.winner; a.unfError += sideStats.unfError;
+  a.pointsPlayed += sideStats.pointsPlayed; a.pointsWon += sideStats.pointsWon;
+  a.normalWon += sideStats.normalWon; a.normalTotal += sideStats.normalTotal;
+  a.servedGames += sideStats.servedGames; a.heldGames += sideStats.heldGames;
+  a.breaksAchieved += sideStats.breaksAchieved; a.breaksSuffered += sideStats.breaksSuffered;
+  a.matchesUmpired += 1;
+  Object.keys(a.max).forEach(k=>{ a.max[k] = Math.max(a.max[k], sideStats.max[k]); });
+  Object.keys(sideStats.unlocked).forEach(k=>{ if(sideStats.unlocked[k]) a.unlocked[k] = true; });
+}
+
+// Recorre TODOS los partidos de SINGLES arbitrados y arma el acumulado por jugador.
+// Los partidos de dobles NUNCA entran acá — no sabemos qué jugador de la
+// pareja hizo cada punto, así que en dobles se premia a la pareja (ver
+// pairUmpireStats), nunca a un jugador individual.
+function playerUmpireStats(){
+  const agg = {};
+  allUmpiredSinglesMatches().forEach(m=>{
+    const ls = m.liveStats;
+    const sideA = computeSideMatchStats(ls, 'A');
+    const sideB = computeSideMatchStats(ls, 'B');
+    (ls.participantsA||[]).forEach(pid=> accumulatePlayerFromSide(agg, pid, sideA));
+    (ls.participantsB||[]).forEach(pid=> accumulatePlayerFromSide(agg, pid, sideB));
+  });
+  return agg;
+}
+
+// Recorre TODOS los partidos de DOBLES arbitrados y arma el acumulado por
+// PAREJA (no por jugador individual): la pareja completa gana o pierde el
+// punto como equipo.
+function pairUmpireStats(){
+  const agg = {};
+  allUmpiredDoublesMatches().forEach(m=>{
+    const ls = m.liveStats;
+    const sideA = computeSideMatchStats(ls, 'A');
+    const sideB = computeSideMatchStats(ls, 'B');
+    if((ls.participantsA||[]).length===2) accumulatePlayerFromSide(agg, pairKeyOf(ls.participantsA), sideA);
+    if((ls.participantsB||[]).length===2) accumulatePlayerFromSide(agg, pairKeyOf(ls.participantsB), sideB);
+  });
+  return agg;
+}
+
+function playerProfileAchievements(playerId){
+  const agg = playerUmpireStats()[playerId];
+  if(!agg) return [];
+  return Object.keys(agg.unlocked).filter(k=>agg.unlocked[k]).map(k=>PROFILE_ACHIEVEMENTS_DEF[k]).filter(Boolean);
+}
+function pairProfileAchievements(pairKey){
+  const agg = pairUmpireStats()[pairKey];
+  if(!agg) return [];
+  return Object.keys(agg.unlocked).filter(k=>agg.unlocked[k]).map(k=>PROFILE_ACHIEVEMENTS_DEF[k]).filter(Boolean);
+}
+
+function playerBestStreaks(playerId){
+  const agg = playerUmpireStats()[playerId];
+  if(!agg) return null;
+  return agg.max;
+}
+
+// ---------- TÍTULOS DE LIGA (dinámicos, un solo dueño, se roban) ----------
+// direction 'max' = gana quien tiene el valor más alto; 'min' = gana quien tiene el más bajo.
+const LEAGUE_TITLES_DEF = [
+  { key:'francotirador', e:'🎯', t:'El Francotirador', category:'power', d:'Más aces acumulados.',
+    direction:'max', value:a=>a.ace, fmt:v=>`${v} ace(s)` },
+  { key:'artillero', e:'🔥', t:'El Artillero', category:'power', d:'Más winners totales registrados.',
+    direction:'max', value:a=>a.winner, fmt:v=>`${v} winner(s)` },
+  { key:'minimoEsfuerzo', e:'⚡', t:'La Ley del Mínimo Esfuerzo', category:'power', d:'Mayor % de puntos ganados de forma directa (aces + winners sobre puntos ganados). Mín. 8 puntos ganados.',
+    direction:'max', minPointsWon:8, value:a=> a.pointsWon>0 ? (a.ace+a.winner)/a.pointsWon : null, fmt:v=>`${Math.round(v*100)}%` },
+  { key:'muralla', e:'🧱', t:'La Muralla de Concreto', category:'defense', d:'Menor promedio de errores no forzados por partido. Mín. 3 partidos arbitrados.',
+    direction:'min', minMatches:3, value:a=> a.unfError/a.matchesUmpired, fmt:v=>`${v.toFixed(1)} err/partido` },
+  { key:'guanteBlanco', e:'🥊', t:'El Guante Blanco', category:'defense', d:'Mayor ratio de dominio: (aces + winners) sobre errores no forzados.',
+    direction:'max', minMatches:1, value:a=> a.unfError>0 ? (a.ace+a.winner)/a.unfError : (a.ace+a.winner>0 ? 999 : null), fmt:v=> v>=999?'∞':v.toFixed(2) },
+  { key:'peloteo', e:'🌾', t:'El Rey del Peloteo', category:'defense', d:'Más puntos normales ganados (sin apoyarse en aces ni winners).',
+    direction:'max', value:a=>a.normalWon, fmt:v=>`${v} punto(s)` },
+  { key:'inquebrantable', e:'🔒', t:'Inquebrantable', category:'serve', d:'Mayor % de games de saque mantenidos. Mín. 5 games de saque.',
+    direction:'max', minServed:5, value:a=> a.servedGames>0 ? a.heldGames/a.servedGames : null, fmt:v=>`${Math.round(v*100)}%` },
+  { key:'pirata', e:'🏴‍☠️', t:'El Pirata', category:'serve', d:'Más quiebres de servicio logrados.',
+    direction:'max', value:a=>a.breaksAchieved, fmt:v=>`${v} quiebre(s)` },
+  { key:'manosMantequilla', e:'🧈', t:'Manos de Mantequilla', category:'shame', d:'Más errores no forzados acumulados en el torneo. (Hall of Shame)',
+    direction:'max', value:a=>a.unfError, fmt:v=>`${v} error(es)` },
+  { key:'regadera', e:'🚿', t:'La Regadera / Mister "Casi"', category:'shame', d:'Más errores no forzados cometidos en un solo partido. (Hall of Shame)',
+    direction:'max', perMatch:true, value:sideStats=>sideStats.unfError, fmt:v=>`${v} error(es) en un partido` }
+];
+
+function computeLeagueTitlesFor(agg, matchesList){
+  const results = [];
+  LEAGUE_TITLES_DEF.filter(d=>!d.perMatch).forEach(def=>{
+    let bestId=null, bestVal=null;
+    Object.keys(agg).forEach(id=>{
+      const a = agg[id];
+      if(def.minMatches && a.matchesUmpired < def.minMatches) return;
+      if(def.minServed && a.servedGames < def.minServed) return;
+      if(def.minPointsWon && a.pointsWon < def.minPointsWon) return;
+      const v = def.value(a);
+      if(v===null || v===undefined || isNaN(v)) return;
+      if(v<=0) return;
+      const better = bestVal===null || (def.direction==='min' ? v < bestVal : v > bestVal);
+      if(better){ bestVal = v; bestId = id; }
+    });
+    if(bestId!==null) results.push({ key:def.key, e:def.e, t:def.t, d:def.d, category:def.category, holderId:bestId, value:bestVal, display:def.fmt(bestVal) });
+  });
+
+  // "La Regadera": el peor partido individual (no un acumulado, así que se recorre distinto)
+  const regaderaDef = LEAGUE_TITLES_DEF.find(d=>d.key==='regadera');
+  let worstId=null, worstVal=0;
+  matchesList.forEach(m=>{
+    const ls = m.liveStats;
+    ['A','B'].forEach(side=>{
+      const s = computeSideMatchStats(ls, side);
+      const parts = side==='A' ? ls.participantsA : ls.participantsB;
+      if(!parts || parts.length===0) return;
+      const id = parts.length===2 ? pairKeyOf(parts) : parts[0];
+      if(s.unfError > worstVal){ worstVal = s.unfError; worstId = id; }
+    });
+  });
+  if(worstId!==null && worstVal>0){
+    results.push({ key:regaderaDef.key, e:regaderaDef.e, t:regaderaDef.t, d:regaderaDef.d, category:regaderaDef.category, holderId:worstId, value:worstVal, display:regaderaDef.fmt(worstVal) });
+  }
+  return results;
+}
+function computeLeagueTitles(){ return computeLeagueTitlesFor(playerUmpireStats(), allUmpiredSinglesMatches()); }
+function computePairLeagueTitles(){ return computeLeagueTitlesFor(pairUmpireStats(), allUmpiredDoublesMatches()); }
 
 // ---------- VIEW: ACHIEVEMENTS ----------
 function viewAchievements(){
@@ -1862,13 +2157,107 @@ function viewAchievements(){
       <button class="btn btn-danger btn-sm" style="margin-left:auto;${state.isAdmin?'':'display:none;'}" onclick="AceApp.deleteAchievement('${a.id}')">✕</button>
     </div>`).join('');
 
+  const umpiredCount = allUmpiredSinglesMatches().length;
+  const leagueTitlesSection = umpiredTitlesSectionHtml(umpiredCount);
+  const umpireBadgesSection = umpireBadgesSectionHtml(umpiredCount);
+
   return head +
     `<h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Trofeos del circuito</h3>
     ${circuitSection || '<div class="empty">Jueguen algunos partidos individuales para desbloquear los trofeos divertidos del circuito (el GOAT, el rival más parejo, el hijo del circuito...).</div>'}
+    <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Títulos de liga · Singles (se roban 👑)</h3>
+    <div class="section-sub" style="margin-top:-4px;">Calculados en base a los partidos arbitrados en vivo. Cuando alguien supera al dueño actual, el título pasa automáticamente a su perfil.</div>
+    ${leagueTitlesSection}
+    <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias de umpire · Singles (rachas y logros de partido)</h3>
+    <div class="section-sub" style="margin-top:-4px;">Solo partidos de singles. Los logros de dobles se premian por pareja y viven en la pestaña Dobles, no acá.</div>
+    ${umpireBadgesSection}
     <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias automáticas</h3>
     ${autoSection || '<div class="empty">Todavía nadie desbloquea insignias.</div>'}
     <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Reconocimientos del grupo</h3>
     ${manual || '<div class="empty">Agreguen su primer logro personalizado: mejor drive, revés más elegante, el que nunca falta a los torneos, etc.</div>'}`;
+}
+
+function umpiredTitlesSectionHtml(umpiredCount){
+  if(umpiredCount===0){
+    return `<div class="empty">Todavía no hay partidos de singles arbitrados en vivo con estadísticas. Usa "🔴 Arbitrar en vivo" en un partido para empezar a generar títulos.</div>`;
+  }
+  const titles = computeLeagueTitles();
+  return titlesGridHtml(titles, playerName);
+}
+function pairTitlesSectionHtml(umpiredCount){
+  if(umpiredCount===0){
+    return `<div class="empty">Todavía no hay partidos de dobles arbitrados en vivo con estadísticas. Usa "🔴 Arbitrar en vivo" en un partido de dobles para empezar a generar títulos de pareja.</div>`;
+  }
+  const titles = computePairLeagueTitles();
+  return titlesGridHtml(titles, pairLabel);
+}
+function titlesGridHtml(titles, holderLabelFn){
+  if(titles.length===0){
+    return `<div class="empty">Todavía no hay suficientes datos para repartir títulos (algunos piden un mínimo de partidos o puntos).</div>`;
+  }
+  const catLabel = {power:'Potencia y Ataque', defense:'Solidez y Defensa', serve:'Servicio y Quiebres', shame:'Hall of Shame 😅'};
+  const order = ['power','defense','serve','shame'];
+  const byCat = {};
+  titles.forEach(t=>{ (byCat[t.category]=byCat[t.category]||[]).push(t); });
+  return order.filter(c=>byCat[c]).map(c=>`
+    <div style="margin-bottom:8px;">
+      <div class="tourn-meta" style="text-transform:uppercase;letter-spacing:.06em;font-size:11px;margin:10px 0 6px;">${catLabel[c]}</div>
+      <div class="grid">
+        ${byCat[c].map(t=>`<div class="card award-card">
+          <div class="award-emoji">${t.e}</div>
+          <div class="disp award-title">${esc(t.t)}</div>
+          <div class="award-who">👑 ${esc(holderLabelFn(t.holderId))}</div>
+          <div class="award-desc">${esc(t.d)}</div>
+          <div class="tourn-meta" style="margin-top:6px;">Actual: ${esc(t.display)}</div>
+        </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function umpireBadgesSectionHtml(umpiredCount){
+  if(umpiredCount===0){
+    return `<div class="empty">Arbitra un partido de singles en vivo (⚡ Ace, 🎯 Winner, 🤦 Error, 🎾 Normal) para empezar a desbloquear rachas e insignias.</div>`;
+  }
+  const agg = playerUmpireStats();
+  const withStats = state.players.filter(p=>agg[p.id]);
+  if(withStats.length===0) return `<div class="empty">Ningún jugador con partidos arbitrados todavía.</div>`;
+  return withStats.map(p=>{
+    const a = agg[p.id];
+    const badges = playerProfileAchievements(p.id);
+    return entityBadgeCardHtml(playerAvatarHtml(p,34)+`<strong>${esc(p.name)}</strong>`, a, badges);
+  }).join('');
+}
+function pairBadgesSectionHtml(umpiredCount){
+  if(umpiredCount===0){
+    return `<div class="empty">Arbitra un partido de dobles en vivo para empezar a desbloquear rachas e insignias de pareja.</div>`;
+  }
+  const agg = pairUmpireStats();
+  const keys = Object.keys(agg);
+  if(keys.length===0) return `<div class="empty">Ninguna pareja con partidos arbitrados todavía.</div>`;
+  return keys.map(key=>{
+    const a = agg[key];
+    const badges = pairProfileAchievements(key);
+    return entityBadgeCardHtml(`<strong>${esc(pairLabel(key))}</strong>`, a, badges);
+  }).join('');
+}
+function entityBadgeCardHtml(headerHtml, a, badges){
+  const m = a.max;
+  const streakPills = [
+    m.point>=2 ? `<span class="stat-pill">🔥 ${m.point} puntos seguidos (mejor racha)</span>` : '',
+    m.ace>=2 ? `<span class="stat-pill">⚡ ${m.ace} aces seguidos</span>` : '',
+    m.winnerS>=2 ? `<span class="stat-pill">🎯 ${m.winnerS} winners seguidos</span>` : '',
+    m.cleanRun>=5 ? `<span class="stat-pill">🧊 ${m.cleanRun} puntos sin error propio</span>` : ''
+  ].filter(Boolean).join('');
+  const badgeHtml = badges.map(b=>`<span class="stat-pill" title="${esc(b.d)}"><span class="badge-emoji">${b.e}</span> ${esc(b.t)}</span>`).join('');
+  return `<div class="card" style="margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      ${headerHtml}
+      <span class="tourn-meta" style="margin-left:auto;">${a.ace} ace · ${a.winner} winner · ${a.unfError} err. no forz.</span>
+    </div>
+    <div class="player-badges" style="justify-content:flex-start;">
+      ${streakPills || '<span class="tourn-meta">Sin rachas destacadas todavía.</span>'}
+    </div>
+    ${badgeHtml ? `<div class="player-badges" style="justify-content:flex-start;margin-top:6px;">${badgeHtml}</div>` : ''}
+  </div>`;
 }
 
 // ---------- VIEW: FINANCE ----------
@@ -2379,6 +2768,7 @@ function toggleCasualMode(mode){
   if(b2) b2.style.display = show ? '' : 'none';
 }
 function openCasualMatchModal() {
+  clearPendingLiveStats();
   if (!state.isAdmin) { aceAlert('Solo el administrador puede anotar partidos libres.'); return; }
   if (state.players.length < 2) { 
     aceAlert('Se necesitan al menos 2 jugadores registrados.'); 
@@ -2539,6 +2929,12 @@ async function saveCasualMatch(btn) {
     matchRules,
     sets
   };
+
+  const pending = window.AceApp._lastLiveStats;
+  if (pending) {
+    matchData.liveStats = pending;
+    window.AceApp._lastLiveStats = null;
+  }
 
   let ok = false;
   await withLoading(btn, 'Guardando...', async () => {
@@ -3413,6 +3809,7 @@ function bootApp(){
 bootApp();
 // ---------- NUEVO MODAL DE PARTIDO EN EL ÁRBOL ----------
 function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
+  clearPendingLiveStats();
   const list = isDoubles ? state.doubles : state.tournaments;
   const t = list.find(x=>x.id===tid);
   const match = t.bracket[rIdx][mIdx];
@@ -3538,7 +3935,13 @@ async function saveBracketMatch(tid, isDoubles, rIdx, mIdx){
 
   match.winner = winnerId;
   match.scoreLine = scoreLine;
-  match.sets = sets; 
+  match.sets = sets;
+
+  const pendingBm = window.AceApp._lastLiveStats;
+  if (pendingBm) {
+    match.liveStats = pendingBm;
+    window.AceApp._lastLiveStats = null;
+  }
 
   // Lógica de Auto-Avance o Auto-Cierre
   const nextRIdx = rIdx + 1;
@@ -3674,8 +4077,37 @@ function startLiveMatch(opts) {
     setsWonA: 0, setsWonB: 0,
     sets: [],
     history: [],
-    stats: { A: {ace:0, winner:0, unfError:0}, B: {ace:0, winner:0, unfError:0} }
+    stats: { A: {ace:0, winner:0, unfError:0}, B: {ace:0, winner:0, unfError:0} },
+    server: null,
+    pointLog: [],
+    gameLog: []
   };
+  renderServerPicker();
+  syncLiveMatchToFirestore();
+}
+
+function renderServerPicker() {
+  let overlay = document.getElementById('umpire-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'umpire-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:var(--court);z-index:3000;display:flex;flex-direction:column;font-family:"Work Sans",sans-serif;color:var(--chalk);';
+    document.getElementById('ace-app').appendChild(overlay);
+  }
+  const s = liveMatch;
+  overlay.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px;gap:16px;">
+      <h3 style="text-align:center;color:var(--ball);font-size:22px;margin-bottom:6px;">¿Quién saca primero?</h3>
+      <button onclick="AceApp.setInitialServer('A')" style="padding:22px;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:22px;font-weight:700;font-family:'Work Sans';cursor:pointer;">${esc(s.nameA)}</button>
+      <button onclick="AceApp.setInitialServer('B')" style="padding:22px;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:22px;font-weight:700;font-family:'Work Sans';cursor:pointer;">${esc(s.nameB)}</button>
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin-top:6px;">Esto nos permite calcular quiebres de servicio más adelante.</div>
+      <button class="btn btn-ghost" onclick="AceApp.closeLiveUmpire(false)" style="margin-top:20px;">✕ Cancelar</button>
+    </div>
+  `;
+}
+
+function setInitialServer(side) {
+  liveMatch.server = side;
   renderLiveUmpire();
   syncLiveMatchToFirestore();
 }
@@ -3714,13 +4146,13 @@ function renderLiveUmpire() {
 
     <!-- ZONA DE BOTONES DE JUGADORES -->
     <div style="flex:1;display:flex;flex-direction:column;padding:10px;gap:10px;">
-      <button onclick="AceApp.promptPointType('A')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
-        <span style="font-size:14px;color:var(--muted);text-transform:uppercase;">Punto para</span>
+      <button onclick="AceApp.promptPointType('A')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid ${s.server==='A'?'var(--ball)':'var(--line)'};color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
+        <span style="font-size:14px;color:var(--muted);text-transform:uppercase;">Punto para${s.server==='A'?' · 🎾 saca':''}</span>
         ${esc(s.nameA)}
       </button>
       
-      <button onclick="AceApp.promptPointType('B')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
-        <span style="font-size:14px;color:var(--muted);text-transform:uppercase;">Punto para</span>
+      <button onclick="AceApp.promptPointType('B')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid ${s.server==='B'?'var(--ball)':'var(--line)'};color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
+        <span style="font-size:14px;color:var(--muted);text-transform:uppercase;">Punto para${s.server==='B'?' · 🎾 saca':''}</span>
         ${esc(s.nameB)}
       </button>
     </div>
@@ -3770,7 +4202,8 @@ function registerPoint(type) {
     ptsA: liveMatch.ptsA, ptsB: liveMatch.ptsB,
     gamesA: liveMatch.gamesA, gamesB: liveMatch.gamesB,
     setsWonA: liveMatch.setsWonA, setsWonB: liveMatch.setsWonB,
-    sets: liveMatch.sets, stats: liveMatch.stats
+    sets: liveMatch.sets, stats: liveMatch.stats,
+    server: liveMatch.server, pointLog: liveMatch.pointLog, gameLog: liveMatch.gameLog
   })));
 
   if(type !== 'normal') {
@@ -3781,6 +4214,15 @@ function registerPoint(type) {
       liveMatch.stats[pendingSide][type]++;
     }
   }
+
+  liveMatch.pointLog.push({
+    side: pendingSide, // quién ganó el punto
+    type, // 'ace' | 'winner' | 'error' (rival regaló el punto) | 'normal'
+    server: liveMatch.server, // quién sacaba en este punto
+    setIndex: liveMatch.sets.length,
+    gameIndex: liveMatch.gamesA + liveMatch.gamesB,
+    ts: Date.now()
+  });
 
   const winner = pendingSide;
   const loser = pendingSide === 'A' ? 'B' : 'A';
@@ -3803,8 +4245,16 @@ function registerPoint(type) {
 }
 
 function winGame(side) {
+  liveMatch.gameLog.push({
+    setIndex: liveMatch.sets.length,
+    gameIndex: liveMatch.gamesA + liveMatch.gamesB,
+    server: liveMatch.server,
+    winner: side
+  });
   liveMatch.ptsA = 0; liveMatch.ptsB = 0;
   liveMatch[`games${side}`]++;
+  // Alternar el saque para el próximo juego
+  liveMatch.server = liveMatch.server === 'A' ? 'B' : 'A';
   const targetGames = liveMatch.rules.gamesPerSet || 2;
   
   if (liveMatch[`games${side}`] >= targetGames) {
@@ -3832,6 +4282,9 @@ function undoLastPoint() {
   liveMatch.setsWonA = lastState.setsWonA; liveMatch.setsWonB = lastState.setsWonB;
   liveMatch.sets = lastState.sets;
   liveMatch.stats = lastState.stats;
+  liveMatch.server = lastState.server;
+  liveMatch.pointLog = lastState.pointLog;
+  liveMatch.gameLog = lastState.gameLog;
   renderLiveUmpire();
 }
 
@@ -3839,7 +4292,19 @@ function finishMatch() {
   // 1. Copiamos los datos finales antes de borrar el partido de la memoria
   const finalSets = [...liveMatch.sets];
   const finalStats = JSON.parse(JSON.stringify(liveMatch.stats));
+  const finalPointLog = JSON.parse(JSON.stringify(liveMatch.pointLog));
+  const finalGameLog = JSON.parse(JSON.stringify(liveMatch.gameLog));
   const callback = liveMatch.onFinishCallback;
+
+  // Dejamos las estadísticas detalladas disponibles para quien vaya a
+  // guardar el resultado (partido libre o de torneo) justo después.
+  window.AceApp._lastLiveStats = {
+    stats: finalStats,
+    pointLog: finalPointLog,
+    gameLog: finalGameLog,
+    participantsA: liveMatch.participantsA || [],
+    participantsB: liveMatch.participantsB || []
+  };
 
   // 2. Cerramos el overlay (esto vuelve liveMatch = null)
   closeLiveUmpire(true);
@@ -3848,6 +4313,13 @@ function finishMatch() {
   if(callback) {
     callback(finalSets, finalStats);
   }
+}
+
+// Se limpia cada vez que se abre un modal de carga de partido "desde cero",
+// para no arrastrar por error las estadísticas de un arbitraje anterior
+// a un partido que finalmente se cargó a mano.
+function clearPendingLiveStats() {
+  window.AceApp._lastLiveStats = null;
 }
 
 function closeLiveUmpire(finished = false) {
@@ -3864,10 +4336,12 @@ function closeLiveUmpire(finished = false) {
 // Exponemos las funciones para que el HTML pueda clickearlas
 window.AceApp = window.AceApp || {};
 window.AceApp.startLiveMatch = startLiveMatch;
+window.AceApp.setInitialServer = setInitialServer;
 window.AceApp.promptPointType = promptPointType;
 window.AceApp.registerPoint = registerPoint;
 window.AceApp.undoLastPoint = undoLastPoint;
 window.AceApp.closeLiveUmpire = closeLiveUmpire;
+window.AceApp.clearPendingLiveStats = clearPendingLiveStats;
   bootApp();
 })();
 </script>
