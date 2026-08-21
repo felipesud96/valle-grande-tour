@@ -3531,19 +3531,20 @@ async function saveCasualMatch(btn) {
   });
   if(ok) aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!');
 }
-  function casualMatchesRowHtml(m){
+ function casualMatchesRowHtml(m){
   const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
   const labelA = m.sideA.map(playerName).join(' / ');
   const labelB = m.sideB.map(playerName).join(' / ');
-  const score = (m.sets || []).map(s => `${s[0]}-${s[1]}`).join(', ');
+  const score = (m.sets || []).map(s => `${s[0]}-${s[1]}`).join(' ');
 
   return `<div class="podium-row" style="padding:10px 0;align-items:center;">
     <div>
       <div><strong>${esc(labelA)}</strong> <span style="color:var(--muted);">vs</span> <strong>${esc(labelB)}</strong></div>
       <div class="tourn-meta">${modeLabel} · ${m.date || 'Sin fecha'}</div>
     </div>
-    <div style="display:flex;align-items:center;gap:12px;">
+    <div style="display:flex;align-items:center;gap:8px;">
       <span class="disp" style="font-size:20px;color:var(--ball);">${score}</span>
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${m.id}')">📲 Tarjeta</button>
       ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deleteCasualMatch('${m.id}')">✕</button>` : ''}
     </div>
   </div>`;
