@@ -5125,8 +5125,8 @@ function issueChallenge(toId) {
         <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Selecciona la fecha en el calendario para proponer este partido libre.</p>
         <div class="field">
           <label>Fecha propuesta</label>
-          <input type="date" id="challenge-date-input" value="${today}" min="${today}" style="cursor:pointer;">
-        </div>
+<input type="date" id="challenge-date-input" value="${today}" min="${today}" style="cursor:pointer;" onclick="this.showPicker()">
+</div>
         <div class="modal-actions">
           <button class="btn btn-ghost" onclick="document.getElementById('challenge-modal').remove()">Cancelar</button>
           <button class="btn btn-ball" onclick="AceApp.confirmChallenge('${toId}')">Enviar desafío</button>
