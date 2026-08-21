@@ -5104,31 +5104,55 @@ function closeLiveUmpire(finished = false) {
   removeLiveMatchFromFirestore(docId);
 }
   // ---------- SISTEMA DE DESAFÍOS ----------
-async function issueChallenge(toPlayerId) {
-  if (!state.myPlayerId) return aceAlert("Debes identificarte primero para enviar un desafío.");
-  if (state.myPlayerId === toPlayerId) return aceAlert("No puedes desafiarte a ti mismo.");
-  
-  const toName = playerName(toPlayerId);
-  const defaultDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const challengeDate = prompt(`¿Para qué fecha propones el partido con ${toName}? (AAAA-MM-DD):`, defaultDate);
-  if (!challengeDate) return;
-  
-  const newChallenge = {
-    id: uid(),
-    fromId: state.myPlayerId,
-    toId: toPlayerId,
-    status: 'pending',
-    date: challengeDate,
-    notifiedTo: false,
-    notifiedFrom: true
-  };
-  
-  state.challenges.push(newChallenge);
-  await save('challenges', state.challenges);
-  render();
-  aceAlert(`¡Desafío enviado a ${toName} para el ${challengeDate}! ⚔️`);
+function issueChallenge(toId) {
+  if (!state.myPlayerId) {
+    return aceAlert("Debes identificarte en el panel superior para lanzar un desafío.");
+  }
+  const target = playerById(toId);
+  if (!target) return;
+
+  // Sugerir la fecha de hoy por defecto
+  const today = new Date().toISOString().split('T')[0];
+
+  const html = `
+    <div class="overlay" id="challenge-modal">
+      <div class="modal">
+        <h2>⚔️ Desafiar a ${esc(target.name)}</h2>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Selecciona la fecha en el calendario para proponer este partido libre.</p>
+        <div class="field">
+          <label>Fecha propuesta</label>
+          <input type="date" id="challenge-date-input" value="${today}" min="${today}" style="cursor:pointer;">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="document.getElementById('challenge-modal').remove()">Cancelar</button>
+          <button class="btn btn-ball" onclick="AceApp.confirmChallenge('${toId}')">Enviar desafío</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
 }
 
+async function confirmChallenge(toId) {
+  const dateVal = document.getElementById('challenge-date-input').value;
+  if (!dateVal) return aceAlert("Debes seleccionar una fecha.");
+  
+  document.getElementById('challenge-modal').remove();
+
+  state.challenges = state.challenges || [];
+  state.challenges.push({
+    id: uid(),
+    fromId: state.myPlayerId,
+    toId: toId,
+    date: dateVal,
+    status: 'pending',
+    createdAt: Date.now()
+  });
+
+  await save('challenges', state.challenges);
+  render();
+  aceAlert('¡Desafío enviado con éxito! ⚔️');
+}
 async function updateChallengeStatus(challengeId, newStatus) {
   const ch = state.challenges.find(c => c.id === challengeId);
   if (!ch) return;  
