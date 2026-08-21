@@ -3576,6 +3576,7 @@ async function setIdentity(id){
   state.myPlayerId = id;
   await save('my-player-id', id, false);
   closeModal(); render();
+  checkChallengeNotifications();
 }
 
 function openPlayerModal(id, linkAsMe){
