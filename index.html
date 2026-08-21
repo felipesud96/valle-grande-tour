@@ -663,7 +663,7 @@ const INITIAL_DATA = {
 };
 async function seedIfEmpty() {
   await authReady;
-  const keys = ['players','tournaments','doubles','achievements','expenses', 'challenges'];
+  const snap = await withRetry(() => db.collection('shared').doc('players').get());
   if (!snap.exists) {
     const keys = ['players','tournaments','doubles','achievements','expenses', 'challenges'];
     for (const k of keys) {
