@@ -4878,6 +4878,33 @@ async function updateChallengeStatus(challengeId, newStatus) {
     aceAlert(`🔔 ${playerName(respondedForMe.toId)} ${resultText} tu desafío programado para el ${respondedForMe.date}.`);
   }
 }
+  async function closeSeason() {
+  if (!state.isAdmin) return aceAlert("Solo los administradores pueden cerrar una temporada.");
+
+  const defaultName = `Temporada ${new Date().getMonth() < 6 ? '1' : '2'} - ${new Date().getFullYear()}`;
+  const seasonName = prompt("Nombre de la temporada a cerrar:", defaultName);
+  if (!seasonName) return;
+
+  const singlesRank = singlesRankingList();
+  const doublesRank = doublesRankingList();
+
+  if (singlesRank.length === 0) return aceAlert("No hay datos de jugadores para cerrar la temporada.");
+
+  const newSeason = {
+    id: uid(),
+    name: seasonName,
+    date: new Date().toISOString().split('T')[0],
+    singlesChampion: singlesRank[0] ? singlesRank[0].id : null,
+    singlesPodium: singlesRank.slice(0, 3).map(r => ({ id: r.id, points: r.points })),
+    doublesPodium: doublesRank.slice(0, 3).map(r => ({ id: r.id, points: r.points }))
+  };
+
+  state.seasons = state.seasons || [];
+  state.seasons.unshift(newSeason);
+  await save('seasons', state.seasons);
+  render();
+  aceAlert(`🏆 ¡${seasonName} cerrada oficialmente! El campeón quedó registrado en el Salón de la Fama.`);
+}
 // Exponemos las funciones para que el HTML pueda clickearlas
 window.AceApp = window.AceApp || {};
 window.AceApp.startLiveMatch = startLiveMatch;
