@@ -3329,10 +3329,34 @@ function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
         </div>
       </div>
     </div>`;
-
+// --- INICIO CONEXIÓN UMPIRE ---
+  window.AceApp.runLiveUmpire = function() {
+    AceApp.startLiveMatch(p1Name, p2Name, rules, function(marcador, estadisticas) {
+      // Llenar automáticamente las cajitas del modal con el resultado del Live Match
+      marcador.forEach((set, index) => {
+        const n = index + 1;
+        const inputA = document.getElementById('bm-s' + n + 'a');
+        const inputB = document.getElementById('bm-s' + n + 'b');
+        if (inputA && inputB) {
+          inputA.value = set[0];
+          inputB.value = set[1];
+        }
+      });
+      // (Opcional) Si en el futuro quieres guardar las estadísticas en la base de datos, 
+      // lo haríamos aquí usando la variable 'estadisticas'.
+    });
+  };
+  // --- FIN CONEXIÓN UMPIRE ---
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Cargar Marcador</h2>
+    <!-- Botón de Arbitrar en Vivo -->
+      <div style="margin-bottom: 20px;">
+        <button type="button" onclick="window.AceApp.runLiveUmpire()" style="width: 100%; background: #E08A6E; color: white; padding: 12px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; font-size: 16px; font-family: 'Work Sans', sans-serif;">
+          🔴 Arbitrar en vivo
+        </button>
+      </div>
+      <hr style="border: 0; border-top: 1px solid var(--line); margin-bottom: 20px;">
     <div class="section-sub" style="margin-bottom: 20px; font-size: 16px; color: var(--ball);">
       ${esc(p1Name)} <span style="color:var(--muted);font-size:12px;margin:0 5px;">VS</span> ${esc(p2Name)}
     </div>
