@@ -4212,7 +4212,7 @@ async function deleteExpense(id){
   render();
 }
 
-function setTab(tab){ state.tab = tab; render(); }
+function setTab(tab){ state.tab = tab; render();checkChallengeNotifications();}
 function setAchSubTab(tab){ state.achSubTab = tab; state.achCategory = 'all'; state.achSearch = ''; render(); }
 function setAchCategory(cat){ state.achCategory = cat; render(); }
 function setAchSearch(val){ state.achSearch = val; render(); }
