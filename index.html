@@ -1581,6 +1581,60 @@ function render() {
         lastRenderedTab = state.tab;
     }
 }
+  function viewMyProfile() {
+  if (!state.myPlayerId) {
+    return `
+      <div class="section-head"><h2>👤 Mi Perfil</h2></div>
+      <div class="empty">Selecciona tu usuario en el selector de identidad en la parte superior para ver tu perfil.</div>
+    `;
+  }
+
+  const p = playerById(state.myPlayerId);
+  if (!p) return `<div class="empty">Jugador no encontrado.</div>`;
+
+  const pts = singlesPointsByPlayer()[state.myPlayerId] || 0;
+  const rankList = singlesRankingList();
+  const pos = rankList.findIndex(r => r.id === state.myPlayerId) + 1;
+  const results = singlesMatchResultsForPlayer(state.myPlayerId);
+  const wins = results.filter(r => r.won).length;
+  const losses = results.length - wins;
+  const badges = autoBadges(state.myPlayerId) || [];
+
+  const recentRows = results.slice(-8).reverse().map(r => `
+    <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
+      <span>${r.date} · ${esc(r.label)}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✔ Victoria':'❌ Derrota'}</span>
+        ${r.matchId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${r.matchId}')">📲 Tarjeta</button>` : ''}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="section-head"><h2>👤 Mi Perfil</h2></div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+        ${playerAvatarHtml(p, 56)}
+        <div>
+          <h2 style="margin:0;">${esc(p.name)}</h2>
+          <div class="tourn-meta">Posición #${pos > 0 ? pos : '—'} · ${pts} pts</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin:15px 0;background:var(--court);padding:10px;border-radius:8px;">
+        <div><strong style="color:var(--ball);font-size:18px;">${wins}</strong><div style="font-size:11px;color:var(--muted);">Victorias</div></div>
+        <div><strong style="color:var(--chalk);font-size:18px;">${losses}</strong><div style="font-size:11px;color:var(--muted);">Derrotas</div></div>
+        <div><strong style="color:var(--ball);font-size:18px;">${badges.length}</strong><div style="font-size:11px;color:var(--muted);">Logros</div></div>
+      </div>
+      <h4 style="margin:12px 0 6px;color:var(--chalk);">Insignias</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${badges.length ? badges.map(b => `<span class="tier-badge" style="font-size:11px;padding:4px 8px;background:var(--court);border:1px solid var(--line);">${b.e} ${esc(b.t)}</span>`).join('') : '<span style="color:var(--muted);font-size:12px;">Sin insignias aún.</span>'}
+      </div>
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 10px;color:var(--chalk);">Últimos Partidos</h4>
+      <div class="podium">${recentRows || '<div style="color:var(--muted);font-size:12px;">Sin partidos registrados.</div>'}</div>
+    </div>
+  `;
+}
 
 // ---------- VIEW: RANKING ----------
 function rankingEvolutionSvg(){
