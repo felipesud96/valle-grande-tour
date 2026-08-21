@@ -4694,6 +4694,36 @@ function closeLiveUmpire(finished = false) {
   liveMatch = null;
   removeLiveMatchFromFirestore(docId);
 }
+  // ---------- SISTEMA DE DESAFÍOS ----------
+async function issueChallenge(toPlayerId) {
+  if (!state.myPlayerId) return aceAlert("Debes identificarte primero para enviar un desafío.");
+  if (state.myPlayerId === toPlayerId) return aceAlert("No puedes desafiarte a ti mismo.");
+  
+  const toName = playerName(toPlayerId);
+  if(!confirm(`¿Estás seguro de enviar un desafío oficial a ${toName}?`)) return;
+  
+  const newChallenge = {
+    id: uid(),
+    fromId: state.myPlayerId,
+    toId: toPlayerId,
+    status: 'pending',
+    date: new Date().toISOString().split('T')[0]
+  };
+  
+  state.challenges.push(newChallenge);
+  await save('challenges', state.challenges);
+  render();
+  aceAlert(`¡Desafío enviado a ${toName} con éxito! ⚔️`);
+}
+
+async function updateChallengeStatus(challengeId, newStatus) {
+  const ch = state.challenges.find(c => c.id === challengeId);
+  if (!ch) return;  
+  ch.status = newStatus;
+  await save('challenges', state.challenges);
+  render();
+  if (newStatus === 'accepted') aceAlert("¡Desafío Aceptado! Preparen las raquetas. 🎾");
+}
 
 // Exponemos las funciones para que el HTML pueda clickearlas
 window.AceApp = window.AceApp || {};
@@ -4704,6 +4734,8 @@ window.AceApp.registerPoint = registerPoint;
 window.AceApp.undoLastPoint = undoLastPoint;
 window.AceApp.closeLiveUmpire = closeLiveUmpire;
 window.AceApp.clearPendingLiveStats = clearPendingLiveStats;
+window.AceApp.issueChallenge = issueChallenge;
+window.AceApp.updateChallengeStatus = updateChallengeStatus;
   bootApp();
 })();
 </script>
