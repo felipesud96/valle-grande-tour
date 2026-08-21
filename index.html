@@ -4815,13 +4815,13 @@ async function updateChallengeStatus(challengeId, newStatus) {
   const ch = state.challenges.find(c => c.id === challengeId);
   if (!ch) return;  
   ch.status = newStatus;
+  ch.notifiedFrom = false; // Permite gatillar la notificación al desafiante
   await save('challenges', state.challenges);
   render();
   if (newStatus === 'accepted') aceAlert("¡Desafío Aceptado! Preparen las raquetas. 🎾");
   else if (newStatus === 'rejected') aceAlert("Desafío rechazado.");
   else if (newStatus === 'cancelled') aceAlert("Desafío cancelado.");
 }
-
 // Exponemos las funciones para que el HTML pueda clickearlas
 window.AceApp = window.AceApp || {};
 window.AceApp.startLiveMatch = startLiveMatch;
