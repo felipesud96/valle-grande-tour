@@ -2293,12 +2293,33 @@ function viewAchievements(){
   let subTabContent = '';
   
   if(subTab === 'mine'){
-    subTabContent = state.myPlayerId ? `
-      <h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil - Singles</h3>
-      ${renderMiPerfilSingles(state.myPlayerId)}
-      <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil - Dobles</h3>
-      ${renderMiPerfilDoubles(state.myPlayerId)}
-    ` : `<div class="empty">Identifícate primero para ver tus propios logros, rachas y títulos.<br><button class="btn btn-ball btn-sm" style="margin-top:10px;" onclick="AceApp.openIdentityModal()">👤 Identifícate</button></div>`;
+    if (!state.myPlayerId) {
+      subTabContent = `<div class="empty">Identifícate primero para ver tus propios logros, rachas y títulos.<br><button class="btn btn-ball btn-sm" style="margin-top:10px;" onclick="AceApp.openIdentityModal()">👤 Identifícate</button></div>`;
+    } else {
+      const pMode = state.profileMode || 'singles';
+      
+      const profileTabs = `
+        <div class="tabs" style="margin-bottom: 20px; border-bottom: 1px solid var(--line);">
+          <button class="tab ${pMode==='singles'?'active':''}" onclick="AceApp.setProfileMode('singles')">🎾 Desempeño Singles</button>
+          <button class="tab ${pMode==='doubles'?'active':''}" onclick="AceApp.setProfileMode('doubles')">🤝 Desempeño Dobles</button>
+        </div>
+      `;
+      
+      let profileData = '';
+      if (pMode === 'singles') {
+        profileData = `
+          <h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil - Singles</h3>
+          ${renderMiPerfilSingles(state.myPlayerId)}
+        `;
+      } else {
+        profileData = `
+          <h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil - Dobles</h3>
+          ${renderMiPerfilDoubles(state.myPlayerId)}
+        `;
+      }
+      
+      subTabContent = profileTabs + profileData;
+    }
   } else if(subTab === 'singles'){
     subTabContent = renderSinglesAchSubtab();
   } else if(subTab === 'doubles'){
@@ -2316,6 +2337,10 @@ function viewAchievements(){
   }
   return head + subTabBar + subTabContent;
   }
+  window.AceApp.setProfileMode = function(mode) {
+  state.profileMode = mode;
+  if(typeof render === 'function') render();
+};
 // ---------- Sub-módulo: Logros Singles ----------
 function renderSinglesAchSubtab(){
   const umpiredCount = allUmpiredSinglesMatches().length;
