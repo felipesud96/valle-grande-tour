@@ -409,6 +409,11 @@
 #ace-app .rank-expiry-warn { font-size:10.5px; color:#D8A34C; display:block; margin-top:2px; }
 #ace-app .rank-actions { display:flex; align-items:center; gap:8px; justify-self:end; }
 #ace-app .rank-h2h-btn { flex-shrink:0; }
+/* Partidos en vivo */
+@keyframes ace-live-pulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+#ace-app .live-dot { width:9px; height:9px; border-radius:50%; background:#E08A6E; display:inline-block; animation: ace-live-pulse 1.2s ease infinite; }
+#ace-app .live-card { border-color:#E08A6E; margin-bottom:10px; padding:12px 14px; background:var(--court-2); border:1px solid rgba(224,138,110,0.5); border-radius:10px; }
+#ace-app .live-tag { font-size:11px; letter-spacing:.06em; color:#E08A6E; font-weight:700; text-transform:uppercase; }
 /* Circuit awards (trofeos del circuito) */
 #ace-app .award-card { text-align:center; }
 #ace-app .award-emoji { font-size:32px; line-height:1; }
@@ -689,7 +694,7 @@ const SUGGESTED_ACHIEVEMENTS = [
   { e:'🌅', t:'Madrugador', d:'El que siempre llega primero a calentar.' },
 ];
 
-let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc' };
+let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {} };
 let tempPhoto = null; // holds base64 during player modal session
 let tempLinkAsMe = false; // whether the player modal in progress should self-link on save
 
@@ -1561,6 +1566,33 @@ function streakBadgeHtml(streak){
   if(streak <= -2) return `<span class="rank-streak" style="color:var(--muted);">📉 ${Math.abs(streak)} seguidas</span>`;
   return '';
 }
+function tennisPointLabel(pts){ return pts === 'AD' ? 'AD' : String(pts); }
+function liveMatchCardHtml(m){
+  const setsLabel = (m.sets||[]).map(s=>`${s[0]}-${s[1]}`).join(', ');
+  const srcLabel = m.source && m.source.type==='tournament' ? ` · ${esc(m.source.tname||'')}` : (m.source && m.source.type==='casual' ? ' · Partido libre' : '');
+  return `<div class="live-card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span class="live-dot"></span>
+      <span class="live-tag">En vivo${srcLabel}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div style="min-width:0;">
+        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.nameA)}</div>
+        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.nameB)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div class="disp" style="font-size:20px;color:var(--ball);">${m.gamesA} <span style="font-size:13px;color:var(--muted);">(${tennisPointLabel(m.ptsA)})</span></div>
+        <div class="disp" style="font-size:20px;color:var(--ball);">${m.gamesB} <span style="font-size:13px;color:var(--muted);">(${tennisPointLabel(m.ptsB)})</span></div>
+      </div>
+    </div>
+    ${setsLabel ? `<div class="tourn-meta" style="margin-top:6px;">Sets: ${setsLabel}</div>` : ''}
+  </div>`;
+}
+function liveMatchesBannerHtml(){
+  const matches = Object.values(state.liveMatches || {});
+  if(matches.length === 0) return '';
+  return `<div style="margin-bottom:22px;">${matches.map(liveMatchCardHtml).join('')}</div>`;
+}
 function viewRanking(){
   const list = singlesRankingList();
   if(state.players.length===0){
@@ -1598,6 +1630,7 @@ function viewRanking(){
     </div>
   </div>
   <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres. Los puntos de cada partido valen por ${POINTS_VALID_MONTHS} meses desde la fecha en que se jugó; luego de eso, dejan de contar y hay que salir a defenderlos.</div>
+  ${liveMatchesBannerHtml()}
   ${rankingEvolutionSvg()}
   <div class="rank-table">${rows}</div>
   ${casualMatchesListHtml('singles')}`;
@@ -1782,7 +1815,9 @@ function viewDoubles(){
       </div>`;
     }).join('');
 
-  return `<div class="section-head"><h2>Ranking de dobles</h2></div><div class="rank-table" style="margin-bottom:30px;">${rankHtml}</div>
+  return `<div class="section-head"><h2>Ranking de dobles</h2></div>
+  ${liveMatchesBannerHtml()}
+  <div class="rank-table" style="margin-bottom:30px;">${rankHtml}</div>
   ${head}${tournHtml}
   ${casualMatchesListHtml('doubles')}`;
 }
@@ -2351,6 +2386,20 @@ function openCasualMatchModal() {
   }
 
   const playerOpts = state.players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const rules = state.matchRules;
+  const isBestOf3 = rules.format === 'bestOf3';
+
+  const setRow = (n) => `
+    <div class="field-row" id="cm-setrow-${n}" style="${n>1 && !isBestOf3 ? 'display:none;' : ''}">
+      <div class="field">
+        <label>${isBestOf3?`Set ${n} (games)`:'Marcador (games)'}</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" min="0" max="9" id="cm-s${n}a" placeholder="A" style="text-align:center;">
+          <span style="color:var(--muted);">–</span>
+          <input type="number" min="0" max="9" id="cm-s${n}b" placeholder="B" style="text-align:center;">
+        </div>
+      </div>
+    </div>`;
 
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
@@ -2381,14 +2430,24 @@ function openCasualMatchModal() {
 
     <div class="field-row">
       <div class="field">
-        <label>Games Marcador (Lado A vs Lado B)</label>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input type="number" min="0" max="9" id="cm-s1a" placeholder="A" style="text-align:center;">
-          <span style="color:var(--muted);">–</span>
-          <input type="number" min="0" max="9" id="cm-s1b" placeholder="B" style="text-align:center;">
-        </div>
+        <label>¿A cuánto se juega?</label>
+        <select id="cm-format" onchange="AceApp.toggleCasualSets(this.value)">
+          <option value="single" ${rules.format==='single'?'selected':''}>Un set corrido</option>
+          <option value="bestOf3" ${rules.format==='bestOf3'?'selected':''}>Mejor de 3 sets</option>
+        </select>
       </div>
+      <div class="field"><label>Games para ganar un set</label><input type="number" min="1" max="9" id="cm-games" value="${rules.gamesPerSet}"></div>
     </div>
+
+    <div style="margin: 6px 0 20px;">
+      <button type="button" onclick="AceApp.runCasualLiveUmpire()" style="width: 100%; background: #E08A6E; color: white; padding: 12px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; font-size: 16px; font-family: 'Work Sans', sans-serif;">
+        🔴 Arbitrar en vivo
+      </button>
+    </div>
+    <hr style="border: 0; border-top: 1px solid var(--line); margin-bottom: 18px;">
+
+    <div class="section-sub" style="margin-bottom:8px;">O anota el resultado a mano:</div>
+    ${setRow(1)}${setRow(2)}${setRow(3)}
 
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
@@ -2396,6 +2455,44 @@ function openCasualMatchModal() {
     </div>`;
 
   openModal(html);
+}
+function toggleCasualSets(format){
+  const show = format === 'bestOf3';
+  const r2 = document.getElementById('cm-setrow-2');
+  const r3 = document.getElementById('cm-setrow-3');
+  if(r2) r2.style.display = show ? '' : 'none';
+  if(r3) r3.style.display = show ? '' : 'none';
+}
+function runCasualLiveUmpire(){
+  const mode = document.getElementById('cm-mode').value;
+  const a1 = document.getElementById('cm-a1').value;
+  const b1 = document.getElementById('cm-b1').value;
+  let nameA, nameB, participantsA, participantsB;
+  if(mode === 'doubles'){
+    const a2 = document.getElementById('cm-a2').value;
+    const b2 = document.getElementById('cm-b2').value;
+    if(!a1 || !a2 || !b1 || !b2 || a1===a2 || b1===b2){ aceAlert('Elige 4 jugadores distintos antes de arbitrar en vivo.'); return; }
+    nameA = [a1,a2].map(playerName).join(' / ');
+    nameB = [b1,b2].map(playerName).join(' / ');
+    participantsA = [a1,a2]; participantsB = [b1,b2];
+  } else {
+    if(!a1 || !b1 || a1===b1){ aceAlert('Elige 2 jugadores distintos antes de arbitrar en vivo.'); return; }
+    nameA = playerName(a1); nameB = playerName(b1);
+    participantsA = [a1]; participantsB = [b1];
+  }
+  const rules = readMatchRulesFields('cm');
+  AceApp.startLiveMatch({
+    nameA, nameB, rules, participantsA, participantsB,
+    source: { type: 'casual' },
+    onFinishCallback: function(marcador, estadisticas){
+      marcador.forEach((set, index) => {
+        const n = index + 1;
+        const inputA = document.getElementById('cm-s' + n + 'a');
+        const inputB = document.getElementById('cm-s' + n + 'b');
+        if (inputA && inputB) { inputA.value = set[0]; inputB.value = set[1]; }
+      });
+    }
+  });
 }
 
 async function saveCasualMatch(btn) {
@@ -2420,9 +2517,18 @@ async function saveCasualMatch(btn) {
     return;
   }
 
-  const gA = document.getElementById('cm-s1a').value;
-  const gB = document.getElementById('cm-s1b').value;
-  if (gA === '' || gB === '') { aceAlert('Ingresa el resultado de games.'); return; }
+  const matchRules = readMatchRulesFields('cm');
+  const readSet = (aId, bId) => {
+    const aEl = document.getElementById(aId), bEl = document.getElementById(bId);
+    const a = aEl.value, b = bEl.value;
+    if(a==='' && b==='') return null;
+    return [a===''?0:Number(a), b===''?0:Number(b)];
+  };
+  const sets = (matchRules.format === 'bestOf3'
+    ? [readSet('cm-s1a','cm-s1b'), readSet('cm-s2a','cm-s2b'), readSet('cm-s3a','cm-s3b')]
+    : [readSet('cm-s1a','cm-s1b')]
+  ).filter(s => s !== null);
+  if(sets.length === 0){ aceAlert('Ingresa el resultado de games (a mano o arbitrando en vivo).'); return; }
 
   const matchData = {
     id: uid(),
@@ -2430,7 +2536,8 @@ async function saveCasualMatch(btn) {
     mode,
     sideA,
     sideB,
-    sets: [[Number(gA), Number(gB)]]
+    matchRules,
+    sets
   };
 
   let ok = false;
@@ -2570,6 +2677,8 @@ function openPlayerProfileModal(playerId){
       <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✅ Victoria':'❌ Derrota'}</span>
     </div>`).join('');
 
+  const liveEntry = Object.values(state.liveMatches || {}).find(m => (m.participantsA||[]).includes(playerId) || (m.participantsB||[]).includes(playerId));
+
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
@@ -2580,6 +2689,7 @@ function openPlayerProfileModal(playerId){
         <div class="tourn-meta">${pos?`#${pos} del ranking individual`:'Sin ranking todavía'} · ${pts} pts</div>
       </div>
     </div>
+    ${liveEntry ? liveMatchCardHtml(liveEntry) : ''}
     ${expiring ? `<div class="section-sub" style="color:#D8A34C;">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')} si no suma más antes de esa fecha.</div>` : ''}
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0;">
       <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:22px;">${wins}-${losses}</div><div class="tourn-meta">Récord (V-D)</div></div>
@@ -3272,7 +3382,7 @@ window.AceApp = {
   openDoublesResultsModal, saveDoublesResults,
   openAchievementModal, saveAchievement, deleteAchievement, pickSuggested,
   togglePaid, markAllPaid, openExpenseModal, saveExpense, deleteExpense, bootApp,
-  openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch,
+  openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
   filterPlayers, setTournamentSort, onCropZoom, applyCrop, toggleTextSize,
 };
 
@@ -3291,7 +3401,7 @@ function rankingSkeletonHtml(){
 }
 function bootApp(){
   document.getElementById('section-content').innerHTML = rankingSkeletonHtml();
-  seedIfEmpty().then(() => loadAll()).then(render).catch(err => {
+  seedIfEmpty().then(() => loadAll()).then(render).then(() => subscribeLiveMatches()).catch(err => {
     console.error('Error al iniciar el circuito:', err);
     document.getElementById('section-content').innerHTML =
       '<div class="empty"><span class="disp">No se pudo conectar</span>' +
@@ -3331,7 +3441,13 @@ function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
     </div>`;
 // --- INICIO CONEXIÓN UMPIRE ---
   window.AceApp.runLiveUmpire = function() {
-    AceApp.startLiveMatch(p1Name, p2Name, rules, function(marcador, estadisticas) {
+    const participantsA = isDoubles ? (t.pairs[Number(match.p1)]||[]) : [match.p1];
+    const participantsB = isDoubles ? (t.pairs[Number(match.p2)]||[]) : [match.p2];
+    AceApp.startLiveMatch({
+      nameA: p1Name, nameB: p2Name, rules,
+      participantsA, participantsB,
+      source: { type: 'tournament', tid, isDoubles, tname: t.name },
+      onFinishCallback: function(marcador, estadisticas) {
       // Llenar automáticamente las cajitas del modal con el resultado del Live Match
       marcador.forEach((set, index) => {
         const n = index + 1;
@@ -3344,6 +3460,7 @@ function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
       });
       // (Opcional) Si en el futuro quieres guardar las estadísticas en la base de datos, 
       // lo haríamos aquí usando la variable 'estadisticas'.
+      }
     });
   };
   // --- FIN CONEXIÓN UMPIRE ---
@@ -3489,16 +3606,69 @@ if(window.AceApp) {
   window.AceApp.openBracketMatchModal = openBracketMatchModal;
   window.AceApp.saveBracketMatch = saveBracketMatch;
 }
-  bootApp();
-  // ==========================================
+// ==========================================
 // MÓDULO DE UMPIRE EN VIVO (LIVE SCORING)
 // ==========================================
 
+// ---------- SINCRONIZACIÓN EN VIVO CON FIRESTORE ----------
+// Cada partido que se está arbitrando en vivo se refleja en el documento
+// 'shared/live_matches' (mismo patrón de acceso que el resto de la app,
+// para no requerir cambios en las reglas de seguridad de Firestore) para
+// que cualquier usuario conectado —incluido desde su propio perfil— pueda
+// verlo actualizarse en tiempo real.
+function liveMatchesDocRef(){ return db.collection('shared').doc('live_matches'); }
+
+async function syncLiveMatchToFirestore(){
+  if(!liveMatch) return;
+  const payload = {
+    nameA: liveMatch.nameA, nameB: liveMatch.nameB,
+    participantsA: liveMatch.participantsA || [],
+    participantsB: liveMatch.participantsB || [],
+    ptsA: liveMatch.ptsA, ptsB: liveMatch.ptsB,
+    gamesA: liveMatch.gamesA, gamesB: liveMatch.gamesB,
+    setsWonA: liveMatch.setsWonA, setsWonB: liveMatch.setsWonB,
+    sets: liveMatch.sets,
+    rulesFormat: liveMatch.rules.format,
+    rulesGamesPerSet: liveMatch.rules.gamesPerSet,
+    source: liveMatch.source || null,
+    updatedAt: Date.now()
+  };
+  try {
+    await liveMatchesDocRef().set({ [liveMatch.docId]: encodeForFirestore(payload) }, { merge: true });
+  } catch(e){
+    console.warn('No se pudo sincronizar el marcador en vivo', e);
+  }
+}
+async function removeLiveMatchFromFirestore(docId){
+  if(!docId) return;
+  try {
+    await liveMatchesDocRef().set({ [docId]: firebase.firestore.FieldValue.delete() }, { merge: true });
+  } catch(e){ /* noop */ }
+}
+
+let liveMatchesUnsub = null;
+function subscribeLiveMatches(){
+  if(liveMatchesUnsub) return;
+  try {
+    liveMatchesUnsub = liveMatchesDocRef().onSnapshot(doc => {
+      const raw = doc.exists ? (doc.data() || {}) : {};
+      state.liveMatches = decodeFromFirestore(raw);
+      render();
+    }, err => console.warn('No se pudo escuchar los partidos en vivo', err));
+  } catch(e){ console.warn('No se pudo iniciar la escucha de partidos en vivo', e); }
+}
+
 let liveMatch = null;
 
-function startLiveMatch(nameA, nameB, rules, onFinishCallback) {
+function startLiveMatch(opts) {
   liveMatch = {
-    nameA, nameB, rules, onFinishCallback,
+    docId: uid(),
+    nameA: opts.nameA, nameB: opts.nameB,
+    participantsA: opts.participantsA || [],
+    participantsB: opts.participantsB || [],
+    source: opts.source || null,
+    rules: opts.rules,
+    onFinishCallback: opts.onFinishCallback,
     ptsA: 0, ptsB: 0,
     gamesA: 0, gamesB: 0,
     setsWonA: 0, setsWonB: 0,
@@ -3507,6 +3677,7 @@ function startLiveMatch(nameA, nameB, rules, onFinishCallback) {
     stats: { A: {ace:0, winner:0, unfError:0}, B: {ace:0, winner:0, unfError:0} }
   };
   renderLiveUmpire();
+  syncLiveMatchToFirestore();
 }
 
 function renderLiveUmpire() {
@@ -3580,6 +3751,7 @@ function renderLiveUmpire() {
       <button class="btn btn-ghost" onclick="document.getElementById('point-type-popup').style.display='none'" style="margin-top:30px;width:100%;padding:15px;font-size:18px;">Cancelar</button>
     </div>
   `;
+  syncLiveMatchToFirestore();
 }
 
 let pendingSide = null;
@@ -3628,9 +3800,6 @@ function registerPoint(type) {
   if (liveMatch) {
     renderLiveUmpire();
   }
-}
-
-  renderLiveUmpire();
 }
 
 function winGame(side) {
@@ -3685,9 +3854,11 @@ function closeLiveUmpire(finished = false) {
   if (!finished) {
     if(!confirm("¿Seguro que quieres salir? El progreso del partido se perderá.")) return;
   }
+  const docId = liveMatch ? liveMatch.docId : null;
   const overlay = document.getElementById('umpire-overlay');
   if (overlay) overlay.remove();
   liveMatch = null;
+  removeLiveMatchFromFirestore(docId);
 }
 
 // Exponemos las funciones para que el HTML pueda clickearlas
