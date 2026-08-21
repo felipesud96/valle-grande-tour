@@ -746,6 +746,7 @@ async function loadAll(){
   state.tournaments = await safeGet('tournaments', []);
   state.doubles = await safeGet('doubles', []);
   state.achievements = await safeGet('achievements', []);
+  state.seasons = await safeGet('seasons', []);
   state.expenses = await safeGet('expenses', []);
   state.myPlayerId = await safeGet('my-player-id', null, false);
   state.isAdmin = await safeGet('is-admin', false, false);
