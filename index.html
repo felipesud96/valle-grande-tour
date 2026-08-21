@@ -1734,15 +1734,11 @@ function liveMatchesBannerHtml(){
   if(matches.length === 0) return '';
   return `<div style="margin-bottom:22px;">${matches.map(liveMatchCardHtml).join('')}</div>`;
 }
+
 function setRankingSubTab(mode) {
   state.rankingSubTab = mode;
   render();
 }
-function setRankingSubTab(mode) {
-  state.rankingSubTab = mode;
-  render();
-}
-window.AceApp.setRankingSubTab = setRankingSubTab;
 
 function viewRanking(){
   const subTab = state.rankingSubTab || 'singles';
