@@ -3601,6 +3601,10 @@ function registerPoint(type) {
     const nextPt = {0: 15, 15: 30, 30: 40};
     liveMatch[`pts${winner}`] = nextPt[wPts];
   }
+  if (liveMatch) {
+    renderLiveUmpire();
+  }
+}
 
   renderLiveUmpire();
 }
