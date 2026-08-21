@@ -4822,6 +4822,29 @@ async function updateChallengeStatus(challengeId, newStatus) {
   else if (newStatus === 'rejected') aceAlert("Desafío rechazado.");
   else if (newStatus === 'cancelled') aceAlert("Desafío cancelado.");
 }
+  function checkChallengeNotifications() {
+  if (!state.myPlayerId || !state.challenges) return;
+  
+  // Pop-up para el desafiado cuando recibe una reta nueva
+  const pendingForMe = state.challenges.find(c => c.toId === state.myPlayerId && c.status === 'pending' && !c.notifiedTo);
+  if (pendingForMe) {
+    pendingForMe.notifiedTo = true;
+    save('challenges', state.challenges);
+    aceAlert(`⚔️ ¡NUEVO DESAFÍO! ${playerName(pendingForMe.fromId)} te ha retado para el día ${pendingForMe.date}. Revisa la pestaña Desafíos.`);
+    return;
+  }
+
+  // Pop-up para el desafiante cuando le responden su reta
+  const respondedForMe = state.challenges.find(c => c.fromId === state.myPlayerId && (c.status === 'accepted' || c.status === 'rejected' || c.status === 'cancelled') && !c.notifiedFrom);
+  if (respondedForMe) {
+    respondedForMe.notifiedFrom = true;
+    save('challenges', state.challenges);
+    let resultText = 'ACEPTÓ 🎾';
+    if (respondedForMe.status === 'rejected') resultText = 'RECHAZÓ ❌';
+    if (respondedForMe.status === 'cancelled') resultText = 'CANCELÓ 🚫';
+    aceAlert(`🔔 ${playerName(respondedForMe.toId)} ${resultText} tu desafío programado para el ${respondedForMe.date}.`);
+  }
+}
 // Exponemos las funciones para que el HTML pueda clickearlas
 window.AceApp = window.AceApp || {};
 window.AceApp.startLiveMatch = startLiveMatch;
