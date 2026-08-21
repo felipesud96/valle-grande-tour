@@ -2348,7 +2348,7 @@ function viewAchievements(){
         `;
       }
       
-      subTabContent = renderDesafiosPerfil(state.myPlayerId) + profileTabs + profileData;
+      subTabContent = profileTabs + profileData;
     }
   } else if(subTab === 'singles'){
     subTabContent = renderSinglesAchSubtab();
@@ -2370,6 +2370,35 @@ function viewAchievements(){
   function setProfileMode(mode) {
   state.profileMode = mode;
   if(typeof render === 'function') render();
+}
+  function viewChallenges() {
+  if (!state.myPlayerId) {
+    return `
+      <div class="section-head"><h2>⚔️ Desafíos de Cancha</h2></div>
+      <div class="empty">
+        <span class="disp">Debes identificarte primero</span>
+        Para gestionar tus desafíos, haz clic en el botón superior <strong>"👤 Identifícate o regístrate"</strong>.
+      </div>`;
+  }
+
+  const p = playerById(state.myPlayerId);
+  const desafiosHtml = renderDesafiosPerfil(state.myPlayerId);
+
+  return `
+    <div class="section-head">
+      <h2>⚔️ Desafíos de Cancha</h2>
+    </div>
+    <div class="section-sub">
+      Gestiona las retas oficiales con tus rivales (${esc(p ? p.name : '')}). Para enviar un nuevo desafío, ve a la pestaña <strong>Jugadores</strong> y presiona <strong>⚔️ Desafiar</strong> en el perfil de tu rival.
+    </div>
+    ${desafiosHtml || `
+      <div class="empty">
+        <span class="disp">Sin desafíos activos</span>
+        No tienes desafíos pendientes, recibidos ni partidos por jugar en este momento.<br>
+        Ve a la pestaña <strong>Jugadores</strong> para retar a alguien.
+      </div>
+    `}
+  `;
 }
   function renderDesafiosPerfil(playerId) {
   if (!playerId) return '';
