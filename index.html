@@ -4765,6 +4765,8 @@ async function updateChallengeStatus(challengeId, newStatus) {
   await save('challenges', state.challenges);
   render();
   if (newStatus === 'accepted') aceAlert("¡Desafío Aceptado! Preparen las raquetas. 🎾");
+  else if (newStatus === 'rejected') aceAlert("Desafío rechazado.");
+  else if (newStatus === 'cancelled') aceAlert("Desafío cancelado.");
 }
 
 // Exponemos las funciones para que el HTML pueda clickearlas
