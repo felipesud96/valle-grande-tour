@@ -2337,10 +2337,10 @@ function viewAchievements(){
   }
   return head + subTabBar + subTabContent;
   }
-  window.AceApp.setProfileMode = function(mode) {
+  function setProfileMode(mode) {
   state.profileMode = mode;
   if(typeof render === 'function') render();
-};
+}
 // ---------- Sub-módulo: Logros Singles ----------
 function renderSinglesAchSubtab(){
   const umpiredCount = allUmpiredSinglesMatches().length;
