@@ -1211,6 +1211,7 @@ function allHeadToHeadPairs(){
   });
   return Object.values(map);
 }
+
 function mostBalancedRivalry(){
   const pairs = allHeadToHeadPairs().filter(p=>p.total>=2);
   let best=null;
@@ -1221,6 +1222,7 @@ function mostBalancedRivalry(){
   });
   return best;
 }
+
 function biggestDomination(){
   const pairs = allHeadToHeadPairs().filter(p=>p.total>=2 && (p.winsX===0 || p.winsY===0));
   let best=null;
@@ -1234,54 +1236,145 @@ function biggestDomination(){
   });
   return best;
 }
+
 function maratonMan(){
   let best=null;
   state.players.forEach(p=>{
-    const stat = playerMatchStats(p.id);
-    if(stat.played>0 && (!best || stat.played>best.played)) best = { id:p.id, played: stat.played };
+    let played = 0;
+    // Sumar partidos de torneos
+    state.tournaments.forEach(t => { if(t.bracket) t.bracket.flat().forEach(m => { if((m.p1===p.id || m.p2===p.id) && m.winner) played++; }) });
+    state.doubles.forEach(t => { if(t.bracket) t.bracket.flat().forEach(m => { 
+       if(m.winner) {
+         const pair1 = t.pairs[Number(m.p1)]||[]; const pair2 = t.pairs[Number(m.p2)]||[];
+         if(pair1.includes(p.id) || pair2.includes(p.id)) played++;
+       }
+    })});
+    // Sumar partidos casuales
+    (state.casualMatches||[]).forEach(m => { if((m.sideA||[]).includes(p.id) || (m.sideB||[]).includes(p.id)) played++; });
+
+    if(played>0 && (!best || played>best.played)) best = { id:p.id, played };
   });
   return best;
 }
-function mostBalancedPlayer(){
-  let best=null;
-  state.players.forEach(p=>{
-    const stat = playerMatchStats(p.id);
-    if(stat.played>=3){
-      const d = Math.abs(50-stat.pct);
-      if(!best || d<best.d) best = { id:p.id, pct: stat.pct, d };
+
+function elResucitado(){
+  const counts = {};
+  allSinglesMatches().forEach(m => {
+    if(m.sets && m.sets.length >= 2) {
+      const wMatch = matchWinnerSide(m);
+      const wSet1 = setWinnerSide(m.sets[0]);
+      if(wMatch && wSet1 && wMatch !== wSet1) {
+        const winnerId = wMatch === 'A' ? m.sideA[0] : m.sideB[0];
+        counts[winnerId] = (counts[winnerId]||0)+1;
+      }
     }
   });
-  return best;
+  let bestId = null, max = 0;
+  for(const [pid, c] of Object.entries(counts)) { if(c > max){ max = c; bestId = pid; } }
+  return max > 0 ? {id: bestId, count: max} : null;
 }
-function longestHistoricStreak(){
-  let best=null;
-  state.players.forEach(p=>{
-    const results = singlesMatchResultsForPlayer(p.id);
-    let cur=0, max=0;
-    results.forEach(r=>{ if(r.won){ cur++; if(cur>max) max=cur; } else cur=0; });
-    if(max>=3 && (!best || max>best.streak)) best = { id:p.id, streak:max };
+
+function laTortuga(){
+  const counts = {};
+  allSinglesMatches().forEach(m => {
+    if(m.sets && m.sets.length === 3) {
+      m.sideA.forEach(pid => counts[pid] = (counts[pid]||0)+1);
+      m.sideB.forEach(pid => counts[pid] = (counts[pid]||0)+1);
+    }
   });
-  return best;
+  let bestId = null, max = 0;
+  for(const [pid, c] of Object.entries(counts)) { if(c > max){ max = c; bestId = pid; } }
+  return max >= 2 ? {id: bestId, count: max} : null;
 }
+
+function manoFria(){
+  const finals = finalsByPlayer(state.tournaments);
+  let bestId = null, max = 0;
+  for(const [pid, c] of Object.entries(finals)) { if(c > max){ max = c; bestId = pid; } }
+  return max >= 2 ? {id: bestId, count: max} : null;
+}
+
+function elCamaleon(){
+  const partners = {};
+  const addPartner = (p1, p2) => {
+    if(p1 && p2) {
+      if(!partners[p1]) partners[p1] = new Set();
+      if(!partners[p2]) partners[p2] = new Set();
+      partners[p1].add(p2);
+      partners[p2].add(p1);
+    }
+  };
+  state.doubles.forEach(t => {
+    (t.pairs||[]).forEach(pair => { if(pair.length===2) addPartner(pair[0], pair[1]); });
+  });
+  (state.casualMatches||[]).filter(m=>m.mode==='doubles').forEach(m => {
+    if(m.sideA && m.sideA.length===2) addPartner(m.sideA[0], m.sideA[1]);
+    if(m.sideB && m.sideB.length===2) addPartner(m.sideB[0], m.sideB[1]);
+  });
+  let bestId = null, max = 0;
+  for(const [pid, set] of Object.entries(partners)) { if(set.size > max){ max = set.size; bestId = pid; } }
+  return max >= 2 ? {id: bestId, count: max} : null;
+}
+
 function circuitAwards(){
   const list = [];
-  const ct = maxCombinedTitles();
-  if(ct>=2){
-    const goat = state.players.find(p=>combinedTitles(p.id)===ct);
-    if(goat) list.push({emoji:'🐐', title:'El GOAT', who:playerName(goat.id), desc:`${ct} título(s) combinados. El más grande del circuito, a criterio de los resultados.`});
-  }
-  const rivalry = mostBalancedRivalry();
-  if(rivalry) list.push({emoji:'⚖️', title:'El rival más parejo', who:`${playerName(rivalry.idX)} vs ${playerName(rivalry.idY)}`, desc:`${rivalry.winsX}-${rivalry.winsY} en ${rivalry.total} partidos. Ninguno se saca ventaja.`});
-  const dom = biggestDomination();
-  if(dom) list.push({emoji:'👶', title:'El hijo del circuito', who:`${playerName(dom.kidId)} es hijo de ${playerName(dom.dominantId)}`, desc:`${dom.wins}-0 en ${dom.total} partidos. No le gana ni de local.`});
-  const blow = biggestBlowout();
-  if(blow) list.push({emoji:'💥', title:'La paliza del circuito', who:`${playerName(blow.winnerId)} a ${playerName(blow.loserId)}`, desc:`Diferencia de ${blow.diff} games en un mismo partido.`});
+  const sPts = singlesPointsByPlayer();
+  const dPts = doublesPointsByPlayer();
+
+  // 1. El GOAT (Más puntos totales)
+  let goat = null, maxPts = -1;
+  state.players.forEach(p => { const t = (sPts[p.id]||0) + (dPts[p.id]||0); if(t > maxPts) { maxPts = t; goat = p; }});
+  if(goat && maxPts > 0) list.push({emoji:'🐐', title:'El GOAT', who:esc(goat.name), desc:`El jugador con más puntos totales acumulados en la historia (${maxPts} pts).`});
+
+  // 2. El Emperador (Mayor % de victorias, min 3 partidos)
+  let emp = null, maxPct = -1;
+  state.players.forEach(p => { const s = playerMatchStats(p.id); if(s.played >= 3 && s.pct > maxPct) { maxPct = s.pct; emp = p; }});
+  if(emp && maxPct > 50) list.push({emoji:'👑', title:'El Emperador', who:esc(emp.name), desc:`Dominancia pura. Mayor efectividad del circuito con un ${maxPct}% de victorias.`});
+
+  // 3. En Racha (Victorias consecutivas actuales)
+  let rachaObj = null;
+  state.players.forEach(p => { const s = currentStreak(p.id); if(s >= 3 && (!rachaObj || s > rachaObj.streak)) rachaObj = {p, streak:s}; });
+  if(rachaObj) list.push({emoji:'🔥', title:'En Racha', who:esc(rachaObj.p.name), desc:`Actualmente imparable. Viene con ${rachaObj.streak} victorias consecutivas.`});
+
+  // 4. Rey de la Cancha (Más partidos jugados)
   const maraton = maratonMan();
-  if(maraton && maraton.played>=3) list.push({emoji:'🏃', title:'El maratónico', who:playerName(maraton.id), desc:`${maraton.played} partidos individuales jugados. El que nunca falta.`});
-  const balanced = mostBalancedPlayer();
-  if(balanced) list.push({emoji:'🧘', title:'Zen absoluto', who:playerName(balanced.id), desc:`${balanced.pct}% de victorias. Ni tan bueno ni tan malo, el equilibrio hecho jugador.`});
-  const streak = longestHistoricStreak();
-  if(streak) list.push({emoji:'🔥', title:'La racha más larga', who:playerName(streak.id), desc:`${streak.streak} victorias seguidas en algún momento del circuito.`});
+  if(maraton && maraton.played >= 3) list.push({emoji:'🏟️', title:'Rey de la Cancha', who:playerName(maraton.id), desc:`El que más juega y nunca falta: ${maraton.played} partidos disputados en total.`});
+
+  // 5. Clásico Eterno (Más partidos entre dos)
+  const pairs = allHeadToHeadPairs();
+  if(pairs.length){
+    const clasico = pairs.reduce((p, c) => (c.total > p.total ? c : p), pairs[0]);
+    if(clasico.total >= 3) list.push({emoji:'⚔️', title:'Clásico Eterno', who:`${playerName(clasico.idX)} vs ${playerName(clasico.idY)}`, desc:`El enfrentamiento más repetido del circuito (${clasico.total} partidos entre ellos).`});
+  }
+
+  // 6. Rival Parejo
+  const rivalry = mostBalancedRivalry();
+  if(rivalry && rivalry.total >= 2) list.push({emoji:'⚖️', title:'El Rival Más Parejo', who:`${playerName(rivalry.idX)} vs ${playerName(rivalry.idY)}`, desc:`El cara a cara más reñido: van ${rivalry.winsX}-${rivalry.winsY} en ${rivalry.total} partidos.`});
+
+  // 7. El Hijo / La Kryptonita
+  const dom = biggestDomination();
+  if(dom && dom.wins >= 3) list.push({emoji:'👶', title:'El Hijo', who:`${playerName(dom.kidId)} (de ${playerName(dom.dominantId)})`, desc:`Su kryptonita personal. Historial de ${dom.wins}-0 a favor de ${playerName(dom.dominantId)}.`});
+
+  // 8. El Rayo / La Paliza
+  const blow = biggestBlowout();
+  if(blow && blow.diff >= 5) list.push({emoji:'⚡', title:'El Rayo', who:`${playerName(blow.winnerId)} (vs ${playerName(blow.loserId)})`, desc:`Victoria letal y contundente con una diferencia de ${blow.diff} games de ventaja en un set.`});
+
+  // 9. El Resucitado (Remontadas)
+  const resucitado = elResucitado();
+  if(resucitado) list.push({emoji:'🧟‍♂️', title:'El Resucitado', who:playerName(resucitado.id), desc:`No lo den por muerto. Ha ganado ${resucitado.count} partido(s) tras empezar perdiendo el primer set.`});
+
+  // 10. La Tortuga (Partidos largos)
+  const tortuga = laTortuga();
+  if(tortuga) list.push({emoji:'🐢', title:'La Tortuga', who:playerName(tortuga.id), desc:`Especialista en alargar todo. Ha jugado ${tortuga.count} partidos a 3 sets.`});
+
+  // 11. Mano Fría (Finales perdidas)
+  const mf = manoFria();
+  if(mf) list.push({emoji:'🧊', title:'Mano Fría', who:playerName(mf.id), desc:`Poca suerte en instancias decisivas. Ha perdido ${mf.count} final(es) de torneos.`});
+
+  // 12. El Camaleón (Dobles)
+  const camaleon = elCamaleon();
+  if(camaleon) list.push({emoji:'🦎', title:'El Camaleón', who:playerName(camaleon.id), desc:`Juega con quien sea: ha hecho pareja de dobles con ${camaleon.count} compañeros distintos.`});
+
   return list;
 }
 function autoBadges(playerId){
