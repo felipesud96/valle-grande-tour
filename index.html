@@ -2346,7 +2346,7 @@ function viewAchievements(){
         `;
       }
       
-      subTabContent = profileTabs + profileData;
+      subTabContent = renderDesafiosPerfil(state.myPlayerId) + profileTabs + profileData;
     }
   } else if(subTab === 'singles'){
     subTabContent = renderSinglesAchSubtab();
@@ -2368,6 +2368,45 @@ function viewAchievements(){
   function setProfileMode(mode) {
   state.profileMode = mode;
   if(typeof render === 'function') render();
+}
+  function renderDesafiosPerfil(playerId) {
+  if (!playerId) return '';
+  const recibidos = (state.challenges || []).filter(c => c.toId === playerId && c.status === 'pending');
+  const aceptados = (state.challenges || []).filter(c => (c.fromId === playerId || c.toId === playerId) && c.status === 'accepted');
+
+  if (recibidos.length === 0 && aceptados.length === 0) return '';
+
+  let html = `<div class="card" style="margin-bottom:20px;">
+    <h4 style="margin:0 0 12px;color:var(--ball);font-size:16px;">⚔️ Desafíos de Cancha</h4>`;
+
+  if (recibidos.length > 0) {
+    html += `<div style="margin-bottom:10px;font-size:13px;"><strong>Te han desafiado:</strong></div>`;
+    recibidos.forEach(c => {
+      html += `
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--court);padding:8px 12px;border-radius:8px;margin-bottom:6px;gap:8px;">
+          <span style="font-size:13px;">🎾 <strong>${esc(playerName(c.fromId))}</strong> te desafió</span>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-ball btn-sm" onclick="AceApp.updateChallengeStatus('${c.id}', 'accepted')">Aceptar</button>
+            <button class="btn btn-danger btn-sm" onclick="AceApp.updateChallengeStatus('${c.id}', 'rejected')">Rechazar</button>
+          </div>
+        </div>`;
+    });
+  }
+
+  if (aceptados.length > 0) {
+    html += `<div style="margin-top:12px;margin-bottom:8px;font-size:13px;"><strong>Partidos pendientes por jugar:</strong></div>`;
+    aceptados.forEach(c => {
+      const rivalId = c.fromId === playerId ? c.toId : c.fromId;
+      html += `
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--court-3);padding:8px 12px;border-radius:8px;margin-bottom:6px;gap:8px;">
+          <span style="font-size:13px;">🔥 Vs <strong>${esc(playerName(rivalId))}</strong></span>
+          <button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">Anotar Resultado</button>
+        </div>`;
+    });
+  }
+
+  html += `</div>`;
+  return html;
 }
 // ---------- Sub-módulo: Logros Singles ----------
 function renderSinglesAchSubtab(){
