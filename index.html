@@ -125,7 +125,15 @@
 #ace-app .tabs {
   display: flex; gap: 4px; max-width: 980px; margin: 0 auto; padding: 0 20px;
   overflow-x: auto; border-bottom: 1px solid var(--line);
+  /* Ocultar scrollbar en Firefox y Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+/* Ocultar scrollbar en Chrome, Safari y Opera */
+#ace-app .tabs::-webkit-scrollbar {
+  display: none;
+}
+
 #ace-app .tab {
   font-family: 'Bebas Neue'; font-size: 16px; letter-spacing: 0.06em;
   background: none; border: none; color: var(--muted); cursor: pointer;
@@ -134,7 +142,6 @@
 }
 #ace-app .tab.active { color: var(--ball); border-bottom-color: var(--ball); }
 #ace-app .tab:hover:not(.active) { color: var(--chalk); }
-
 /* ---------- SECTION ---------- */
 #ace-app .section { padding-top: 26px; }
 #ace-app .section-head { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom: 16px; flex-wrap: wrap;}
