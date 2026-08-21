@@ -420,6 +420,13 @@
 #ace-app .award-title { font-size:17px; color:var(--ball); margin:8px 0 2px; }
 #ace-app .award-who { font-size:13px; font-weight:700; }
 #ace-app .award-desc { font-size:11px; color:var(--muted); margin-top:4px; }
+  @keyframes fadeTab {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-tab {
+    animation: fadeTab 0.3s ease-out forwards;
+  }
 </style>
 
 <div id="ace-app">
