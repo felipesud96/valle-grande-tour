@@ -2282,36 +2282,39 @@ function viewAchievements(){
       <button class="btn btn-danger btn-sm" style="margin-left:auto;${state.isAdmin?'':'display:none;'}" onclick="AceApp.deleteAchievement('${a.id}')">✕</button>
     </div>`).join('');
 
-  const subTab = state.achSubTab || (state.myPlayerId ? 'mine' : 'singles');
-  const subTabBar = `<div style="display:flex;gap:8px;margin:16px 0 18px;flex-wrap:wrap;">
+  const subTab = state.achSubTab || 'global';
+  const subTabBar = `<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
     <button class="btn btn-sm ${subTab==='mine'?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchSubTab('mine')">👤 Mi perfil</button>
-    <button class="btn btn-sm ${subTab==='singles'?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchSubTab('singles')">🎾 Logros Singles</button>
-    <button class="btn btn-sm ${subTab==='doubles'?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchSubTab('doubles')">👥 Logros Dobles</button>
+    <button class="btn btn-sm ${subTab==='global'?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchSubTab('global')">🌍 Globales</button>
+    <button class="btn btn-sm ${subTab==='singles'?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchSubTab('singles')">🎾 Singles</button>
+    <button class="btn btn-sm ${subTab==='doubles'?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchSubTab('doubles')">🤝 Dobles</button>
   </div>`;
 
   let subTabContent = '';
-  if(subTab==='mine'){
+  
+  if(subTab === 'mine'){
     subTabContent = state.myPlayerId ? `
-      <h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil · Singles</h3>
+      <h3 style="font-size:18px;margin:6px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil - Singles</h3>
       ${renderMiPerfilSingles(state.myPlayerId)}
-      <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil · Dobles</h3>
+      <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Tu perfil - Dobles</h3>
       ${renderMiPerfilDoubles(state.myPlayerId)}
     ` : `<div class="empty">Identifícate primero para ver tus propios logros, rachas y títulos.<br><button class="btn btn-ball btn-sm" style="margin-top:10px;" onclick="AceApp.openIdentityModal()">👤 Identifícate</button></div>`;
-  } else if(subTab==='singles'){
+  } else if(subTab === 'singles'){
     subTabContent = renderSinglesAchSubtab();
-  } else {
+  } else if(subTab === 'doubles'){
     subTabContent = renderDoublesAchSubtab();
+  } else {
+    // ESTA ES LA PESTAÑA GLOBAL: Aquí quedan encerrados los trofeos y el GOAT original
+    subTabContent = `
+      <h3 style="font-size:18px;margin:10px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Trofeos del circuito</h3>
+      ${circuitSection || '<div class="empty">Jueguen algunos partidos para desbloquear trofeos...</div>'}
+      <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias automáticas</h3>
+      ${autoSection || '<div class="empty">Todavía nadie desbloquea insignias.</div>'}
+      <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Reconocimientos del grupo</h3>
+      ${manual || '<div class="empty">Agreguen su primer logro personalizado...</div>'}
+    `;
   }
-
-  return head + subTabBar + subTabContent +
-    `<h3 style="font-size:18px;margin:34px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Trofeos del circuito</h3>
-    ${circuitSection || '<div class="empty">Jueguen algunos partidos individuales para desbloquear los trofeos divertidos del circuito (el GOAT, el rival más parejo, el hijo del circuito...).</div>'}
-    <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Insignias automáticas</h3>
-    ${autoSection || '<div class="empty">Todavía nadie desbloquea insignias.</div>'}
-    <h3 style="font-size:18px;margin:26px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Reconocimientos del grupo</h3>
-    ${manual || '<div class="empty">Agreguen su primer logro personalizado: mejor drive, revés más elegante, el que nunca falta a los torneos, etc.</div>'}`;
-}
-
+  return head + subTabBar + subTabContent;
 // ---------- Sub-módulo: Logros Singles ----------
 function renderSinglesAchSubtab(){
   const umpiredCount = allUmpiredSinglesMatches().length;
