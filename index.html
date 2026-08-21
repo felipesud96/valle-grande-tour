@@ -2874,6 +2874,96 @@ function viewHallOfFame(){
 }
 
 // ---------- VIEW: STATS ----------
+  function getPlayerAttributes(playerId) {
+  const mStats = playerMatchStats(playerId);
+  const umpStats = (playerUmpireStats && playerUmpireStats()[playerId]) || {};
+  
+  // 1. Efectividad
+  const efectividad = mStats ? (mStats.pct || 40) : 40;
+
+  // 2. Potencia (Aces + Winners por partido)
+  const hitsPerMatch = umpStats.matchesUmpired ? ((umpStats.ace || 0) + (umpStats.winner || 0)) / umpStats.matchesUmpired : 0;
+  const potencia = Math.min(100, Math.max(20, Math.round(hitsPerMatch * 10) + 30));
+
+  // 3. Control (Bajo nivel de errores)
+  const errorRate = umpStats.pointsPlayed ? ((umpStats.unfError || 0) / umpStats.pointsPlayed) : 0.2;
+  const control = Math.max(10, Math.round((1 - errorRate) * 100));
+
+  // 4. Experiencia (Partidos jugados en el circuito)
+  const experiencia = Math.min(100, Math.max(25, ((mStats ? mStats.played : 0) * 8) + 20));
+
+  // 5. Rendimiento bajo presión
+  const presion = Math.min(100, Math.max(30, ((umpStats.breaksAchieved || 0) * 12) + 35));
+
+  return [efectividad, potencia, control, experiencia, presion];
+}
+
+function generateRadarSvg(playerA, playerB) {
+  if (!playerA) return '';
+  const statsA = getPlayerAttributes(playerA.id);
+  const statsB = playerB ? getPlayerAttributes(playerB.id) : null;
+
+  const labels = ['Efectividad', 'Potencia', 'Control', 'Experiencia', 'Presión'];
+  const total = labels.length;
+  const size = 260;
+  const center = size / 2;
+  const radius = 80;
+
+  function getCoordinates(index, value) {
+    const angle = (Math.PI * 2 / total) * index - Math.PI / 2;
+    const r = (value / 100) * radius;
+    return {
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle)
+    };
+  }
+
+  // Anillos de fondo (Red Spiderweb)
+  let gridSvg = [0.25, 0.5, 0.75, 1].map(level => {
+    const points = labels.map((_, i) => {
+      const { x, y } = getCoordinates(i, level * 100);
+      return `${x},${y}`;
+    }).join(' ');
+    return `<polygon points="${points}" fill="none" stroke="var(--line)" stroke-width="1"/>`;
+  }).join('');
+
+  // Ejes y Etiquetas
+  let axesSvg = labels.map((label, i) => {
+    const { x, y } = getCoordinates(i, 100);
+    const labelPos = getCoordinates(i, 122);
+    return `
+      <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${labelPos.x}" y="${labelPos.y + 3}" text-anchor="middle" font-size="9" fill="var(--muted)" font-weight="600">${label}</text>
+    `;
+  }).join('');
+
+  // Polígono Jugador A (Dorado/Pelota)
+  const polyA = labels.map((_, i) => {
+    const { x, y } = getCoordinates(i, statsA[i]);
+    return `${x},${y}`;
+  }).join(' ');
+
+  // Polígono Jugador B (Naranja/Rival)
+  let polyBSvg = '';
+  if (statsB) {
+    const polyB = labels.map((_, i) => {
+      const { x, y } = getCoordinates(i, statsB[i]);
+      return `${x},${y}`;
+    }).join(' ');
+    polyBSvg = `<polygon points="${polyB}" fill="rgba(224, 138, 110, 0.35)" stroke="#E08A6E" stroke-width="2"/>`;
+  }
+
+  return `
+    <div style="text-align:center;margin:10px 0;">
+      <svg viewBox="0 0 ${size} ${size}" style="max-width:270px;width:100%;height:auto;overflow:visible;">
+        ${gridSvg}
+        ${axesSvg}
+        <polygon points="${polyA}" fill="rgba(212, 175, 55, 0.4)" stroke="var(--ball)" stroke-width="2"/>
+        ${polyBSvg}
+      </svg>
+    </div>
+  `;
+}
 function viewStats(){
   const head = `<div class="section-head"><h2>Estadísticas generales</h2></div>
   <div class="section-sub">Números del circuito, calculados con los torneos cerrados y los marcadores que hayan cargado.</div>`;
