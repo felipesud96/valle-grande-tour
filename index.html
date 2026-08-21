@@ -3639,10 +3639,17 @@ function undoLastPoint() {
 }
 
 function finishMatch() {
+  // 1. Copiamos los datos finales antes de borrar el partido de la memoria
   const finalSets = [...liveMatch.sets];
+  const finalStats = JSON.parse(JSON.stringify(liveMatch.stats));
+  const callback = liveMatch.onFinishCallback;
+
+  // 2. Cerramos el overlay (esto vuelve liveMatch = null)
   closeLiveUmpire(true);
-  if(liveMatch.onFinishCallback) {
-    liveMatch.onFinishCallback(finalSets, liveMatch.stats);
+
+  // 3. Ejecutamos el aviso usando la copia que guardamos
+  if(callback) {
+    callback(finalSets, finalStats);
   }
 }
 
