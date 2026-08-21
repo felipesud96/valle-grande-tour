@@ -2372,13 +2372,15 @@ function viewAchievements(){
   function renderDesafiosPerfil(playerId) {
   if (!playerId) return '';
   const recibidos = (state.challenges || []).filter(c => c.toId === playerId && c.status === 'pending');
+  const enviados = (state.challenges || []).filter(c => c.fromId === playerId && c.status === 'pending');
   const aceptados = (state.challenges || []).filter(c => (c.fromId === playerId || c.toId === playerId) && c.status === 'accepted');
 
-  if (recibidos.length === 0 && aceptados.length === 0) return '';
+  if (recibidos.length === 0 && enviados.length === 0 && aceptados.length === 0) return '';
 
   let html = `<div class="card" style="margin-bottom:20px;">
     <h4 style="margin:0 0 12px;color:var(--ball);font-size:16px;">⚔️ Desafíos de Cancha</h4>`;
 
+  // Desafíos recibidos
   if (recibidos.length > 0) {
     html += `<div style="margin-bottom:10px;font-size:13px;"><strong>Te han desafiado:</strong></div>`;
     recibidos.forEach(c => {
@@ -2393,6 +2395,19 @@ function viewAchievements(){
     });
   }
 
+  // Desafíos enviados esperando respuesta
+  if (enviados.length > 0) {
+    html += `<div style="margin-top:10px;margin-bottom:10px;font-size:13px;"><strong>Desafíos que enviaste:</strong></div>`;
+    enviados.forEach(c => {
+      html += `
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--court);padding:8px 12px;border-radius:8px;margin-bottom:6px;gap:8px;">
+          <span style="font-size:13px;">⌛ Para <strong>${esc(playerName(c.toId))}</strong> (esperando respuesta)</span>
+          <button class="btn btn-danger btn-sm" onclick="AceApp.updateChallengeStatus('${c.id}', 'cancelled')">Cancelar</button>
+        </div>`;
+    });
+  }
+
+  // Partidos aceptados pendientes por jugar
   if (aceptados.length > 0) {
     html += `<div style="margin-top:12px;margin-bottom:8px;font-size:13px;"><strong>Partidos pendientes por jugar:</strong></div>`;
     aceptados.forEach(c => {
@@ -2400,7 +2415,10 @@ function viewAchievements(){
       html += `
         <div style="display:flex;justify-content:space-between;align-items:center;background:var(--court-3);padding:8px 12px;border-radius:8px;margin-bottom:6px;gap:8px;">
           <span style="font-size:13px;">🔥 Vs <strong>${esc(playerName(rivalId))}</strong></span>
-          <button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">Anotar Resultado</button>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">Anotar Resultado</button>
+            <button class="btn btn-ghost btn-sm" onclick="AceApp.updateChallengeStatus('${c.id}', 'cancelled')">Cancelar</button>
+          </div>
         </div>`;
     });
   }
