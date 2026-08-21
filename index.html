@@ -1734,47 +1734,82 @@ function liveMatchesBannerHtml(){
   if(matches.length === 0) return '';
   return `<div style="margin-bottom:22px;">${matches.map(liveMatchCardHtml).join('')}</div>`;
 }
+function setRankingSubTab(mode) {
+  state.rankingSubTab = mode;
+  render();
+}
+window.AceApp.setRankingSubTab = setRankingSubTab;
+
 function viewRanking(){
-  const list = singlesRankingList();
-  if(state.players.length===0){
-    return `<div class="section-head"><h2>Ranking individual</h2></div>
-    <div class="empty"><span class="disp">Sin jugadores todavía</span>Agrega jugadores en la pestaña "Jugadores" para que aparezcan aquí.</div>`;
+  const subTab = state.rankingSubTab || 'singles';
+
+  const subNavHtml = `
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button class="btn ${subTab === 'singles' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="AceApp.setRankingSubTab('singles')">🏸 Singles</button>
+      <button class="btn ${subTab === 'doubles' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="AceApp.setRankingSubTab('doubles')">🟡 Dobles</button>
+    </div>
+  `;
+
+  // 1. Si se selecciona Dobles, renderiza la vista de dobles
+  if (subTab === 'doubles') {
+    return `
+      <div class="section-head"><h2>Ranking Dobles</h2></div>
+      ${subNavHtml}
+      ${typeof viewDoubles === 'function' ? viewDoubles() : '<div class="empty">Ranking de dobles en construcción</div>'}
+    `;
   }
-  const rows = list.map((r,i)=>{
+
+  // 2. Vista de Singles
+  const list = singlesRankingList();
+  if (state.players.length === 0) {
+    return `
+      <div class="section-head"><h2>Ranking Individual</h2></div>
+      ${subNavHtml}
+      <div class="empty"><span class="disp">Sin jugadores todavía</span>Agrega jugadores en la pestaña "Jugadores".</div>
+    `;
+  }
+
+  const rows = list.map((r, i) => {
     const p = playerById(r.id);
-    const topClass = i===0?'top1':(i===1?'top2':(i===2?'top3':''));
+    const topClass = i === 0 ? 'top1' : (i === 1 ? 'top2' : (i === 2 ? 'top3' : ''));
     const trend = recentPointsTrend(r.id, false);
     const streak = currentStreak(r.id);
     const expiring = pointsExpiringSoon(r.id, false);
-    return `<div class="rank-row ${topClass}">
-      <div class="rank-pos">${i+1}</div>
-      <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
-        ${playerAvatarHtml(p,46)}
-        <div class="rank-name-block">
-          <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(trend)}</span>
-          <span class="rank-meta">${(titlesByPlayer(state.tournaments,false)[r.id]||0)} título(s) · ${p?playerMetaShort(p):''} ${streakBadgeHtml(streak)}</span>
-          ${expiring ? `<span class="rank-expiry-warn">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')}</span>` : ''}
+
+    return `
+      <div class="rank-row ${topClass}">
+        <div class="rank-pos">${i + 1}</div>
+        <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
+          ${playerAvatarHtml(p, 46)}
+          <div class="rank-name-block">
+            <span class="rank-name">${esc(r.name)}${p && p.alias ? ` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>` : ''} ${trendBadgeHtml(trend)}</span>
+            <span class="rank-meta">${(titlesByPlayer(state.tournaments, false)[r.id] || 0)} título(s) · ${p ? playerMetaShort(p) : ''} ${streakBadgeHtml(streak)}</span>
+            ${expiring ? `<span class="rank-expiry-warn">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')}</span>` : ''}
+          </div>
+        </div>
+        <div class="rank-actions">
+          <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">⚔️</button>
+          <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
         </div>
       </div>
-      <div class="rank-actions">
-        <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">🤝</button>
-        <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
-      </div>
-    </div>`;
+    `;
   }).join('');
 
-  return `<div class="section-head">
-    <h2>Ranking individual</h2>
-    <div style="display:flex;gap:8px;">
-      ${state.isAdmin ? `<button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">+ Anotar Partido Libre</button>` : ''}
-      <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">🤝 Cara a cara</button>
+  return `
+    <div class="section-head">
+      <h2>Ranking Individual</h2>
+      <div style="display:flex;gap:8px;">
+        ${state.isAdmin ? `<button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">+ Anotar Partido Libre</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">⚔️ Cara a cara</button>
+      </div>
     </div>
-  </div>
-  <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres. Los puntos de cada partido valen por ${POINTS_VALID_MONTHS} meses desde la fecha en que se jugó; luego de eso, dejan de contar y hay que salir a defenderlos.</div>
-  ${liveMatchesBannerHtml()}
-  ${rankingEvolutionSvg()}
-  <div class="rank-table">${rows}</div>
-  ${casualMatchesListHtml('singles')}`;
+    ${subNavHtml}
+    <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres.</div>
+    ${liveMatchesBannerHtml()}
+    ${rankingEvolutionSvg()}
+    <div class="rank-table">${rows}</div>
+    ${casualMatchesListHtml('singles')}
+  `;
 }
 function playerMetaShort(p){
   const bits = [];
