@@ -4842,18 +4842,28 @@ async function updateChallengeStatus(challengeId, newStatus) {
 }
   function checkChallengeNotifications() {
   if (!state.myPlayerId || !state.challenges) return;
-  
-  // Pop-up para el desafiado cuando recibe una reta nueva
-  const pendingForMe = state.challenges.find(c => c.toId === state.myPlayerId && c.status === 'pending' && !c.notifiedTo);
+
+  // 1. Pop-up para el desafiado (Reta nueva)
+  const pendingForMe = state.challenges.find(c => 
+    c.toId === state.myPlayerId && 
+    c.status === 'pending' && 
+    !c.notifiedTo
+  );
+
   if (pendingForMe) {
     pendingForMe.notifiedTo = true;
     save('challenges', state.challenges);
-    aceAlert(`⚔️ ¡NUEVO DESAFÍO! ${playerName(pendingForMe.fromId)} te ha retado para el día ${pendingForMe.date}. Revisa la pestaña Desafíos.`);
+    aceAlert(`⚔️ ¡NUEVO DESAFÍO! ${playerName(pendingForMe.fromId)} te ha retado para el día ${pendingForMe.date}.`);
     return;
   }
 
-  // Pop-up para el desafiante cuando le responden su reta
-  const respondedForMe = state.challenges.find(c => c.fromId === state.myPlayerId && (c.status === 'accepted' || c.status === 'rejected' || c.status === 'cancelled') && !c.notifiedFrom);
+  // 2. Pop-up para el desafiante (Respuesta recibida)
+  const respondedForMe = state.challenges.find(c => 
+    c.fromId === state.myPlayerId && 
+    (c.status === 'accepted' || c.status === 'rejected' || c.status === 'cancelled') && 
+    !c.notifiedFrom
+  );
+
   if (respondedForMe) {
     respondedForMe.notifiedFrom = true;
     save('challenges', state.challenges);
