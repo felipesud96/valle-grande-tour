@@ -2819,16 +2819,46 @@ function viewFinance(){
 
 
 // ---------- VIEW: HALL OF FAME ----------
+function renderTemporadasHallOfFame() {
+  const seasons = state.seasons || [];
+  if (seasons.length === 0) return '';
+
+  let html = `<div class="card" style="margin-bottom:20px;">
+    <h3 style="margin:0 0 12px;color:var(--ball);font-size:18px;">👑 Campeones de Temporada (Semestrales)</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;">`;
+
+  seasons.forEach(s => {
+    const champ = playerById(s.singlesChampion);
+    html += `
+      <div style="background:var(--court);padding:12px;border-radius:8px;border:1px solid var(--line);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <strong style="color:var(--chalk);font-size:15px;">${esc(s.name)}</strong>
+          <span style="font-size:11px;color:var(--muted);">${s.date}</span>
+        </div>
+        <div style="font-size:13px;color:var(--ball);">
+          🏆 <strong>Campeón Singles:</strong> ${champ ? esc(champ.name) : '—'}
+        </div>
+      </div>`;
+  });
+
+  html += `</div></div>`;
+  return html;
+}
+
 function viewHallOfFame(){
   const head = `<div class="section-head"><h2>Salón de la fama</h2></div>
-  <div class="section-sub">La vitrina de trofeos: todos los campeones del circuito, individuales y de dobles, ordenados por fecha.</div>`;
+  <div class="section-sub">La vitrina de trofeos: campeones de temporada y ganadores de cada torneo del circuito.</div>`;
+  
+  const temporadasHtml = renderTemporadasHallOfFame();
   const entries = hallOfFameEntries();
-  if(entries.length===0){
-    return head + `<div class="empty"><span class="disp">Todavía no hay campeones</span>En cuanto se cierre el primer torneo, aparece aquí.</div>`;
+  
+  if (entries.length === 0 && !temporadasHtml) {
+    return head + `<div class="empty"><span class="disp">Todavía no hay campeones</span>En cuanto se cierre el primer torneo o temporada, aparecerá aquí.</div>`;
   }
-  const cards = entries.map(e=>`
+  
+  const cards = entries.map(e => `
     <div class="card" style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
-      <div style="font-size:30px;">${e.type==='doubles'?'🤝':'🏆'}</div>
+      <div style="font-size:30px;">${e.type==='doubles'?'👥':'🏆'}</div>
       <div style="flex:1;">
         <div class="tourn-title" style="font-size:17px;">${esc(e.name)} <span class="tier-badge" style="background:${e.tier.color};font-size:9px;vertical-align:middle;">${e.tier.short}</span></div>
         <div class="tourn-meta">${e.date||'Sin fecha'} · ${e.type==='doubles'?'Dobles':'Individual'}</div>
@@ -2837,8 +2867,10 @@ function viewHallOfFame(){
         <div style="font-weight:700;color:var(--ball);">${esc(e.championLabel)}</div>
         ${e.runnerUpLabel?`<div class="tourn-meta">venció a ${esc(e.runnerUpLabel)}</div>`:''}
       </div>
-    </div>`).join('');
-  return head + cards;
+    </div>
+  `).join('');
+
+  return head + temporadasHtml + cards;
 }
 
 // ---------- VIEW: STATS ----------
@@ -4916,6 +4948,7 @@ window.AceApp.closeLiveUmpire = closeLiveUmpire;
 window.AceApp.clearPendingLiveStats = clearPendingLiveStats;
 window.AceApp.issueChallenge = issueChallenge;
 window.AceApp.updateChallengeStatus = updateChallengeStatus;
+window.AceApp.closeSeason = closeSeason;
   bootApp();
 })();
 </script>
