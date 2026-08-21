@@ -1808,10 +1808,13 @@ function playersGridHtml(){
       ${p.priorTitles?`<div class="player-bio"><strong>Antes del circuito:</strong> ${esc(p.priorTitles)}</div>`:''}
       <div class="player-badges">${badges}</div>
       ${manualHtml?`<div class="player-badges" style="margin-top:6px;">${manualHtml}</div>`:''}
-      ${canEdit ? `<div class="card-actions">
-        <button class="btn btn-ghost btn-sm" onclick="AceApp.openPlayerModal('${p.id}')">Editar</button>
-        ${state.isAdmin?`<button class="btn btn-danger btn-sm" onclick="AceApp.deletePlayer('${p.id}')">Eliminar</button>`:''}
-      </div>` : ''}
+     <div class="card-actions">
+          ${state.myPlayerId && p.id !== state.myPlayerId ? `
+            <button class="btn btn-ball btn-sm" onclick="AceApp.issueChallenge('${p.id}')">⚔️ Desafiar</button>
+          ` : ''}
+          ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPlayerModal('${p.id}')">Editar</button>` : ''}
+          ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deletePlayer('${p.id}')">Eliminar</button>` : ''}
+        </div>
     </div>`;
   }).join('');
   return `<div class="grid">${cards}</div>`;
