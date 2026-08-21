@@ -183,6 +183,46 @@
 #ace-app .rank-pts .num { font-family:'Bebas Neue'; font-size: 22px; color: var(--ball); }
 #ace-app .rank-pts .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; }
 
+/* ---------- ON FIRE (racha de 3+ victorias seguidas) ---------- */
+#ace-app .avatar-fire-wrap { position: relative; display: inline-flex; flex: none; }
+#ace-app .avatar-fire-wrap .avatar { position: relative; z-index: 2; }
+#ace-app .avatar-fire-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,158,54,0.65) 0%, rgba(255,90,20,0.4) 45%, rgba(255,90,20,0) 76%);
+  filter: blur(2px);
+  z-index: 1;
+  pointer-events: none;
+  animation: aceFireGlow 1.05s ease-in-out infinite alternate;
+}
+#ace-app .avatar-fire-emoji {
+  position: absolute;
+  top: -11px;
+  right: -7px;
+  font-size: 15px;
+  z-index: 3;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(255,120,0,0.85));
+  animation: aceFireFlicker 0.55s ease-in-out infinite alternate;
+}
+@keyframes aceFireGlow {
+  0%   { transform: scale(0.92); opacity: 0.7; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+@keyframes aceFireFlicker {
+  0%   { transform: rotate(-8deg) scale(0.9) translateY(0px); opacity: 0.82; }
+  50%  { transform: rotate(5deg) scale(1.1) translateY(-2px); opacity: 1; }
+  100% { transform: rotate(-4deg) scale(0.97) translateY(1px); opacity: 0.9; }
+}
+
+/* ---------- RADAR / SPIDER CHART DE ATRIBUTOS ---------- */
+#ace-app .radar-card { text-align: center; }
+#ace-app .radar-legend { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:10px; }
+#ace-app .radar-legend .stat-pill { font-size: 11px; }
+
 /* ---------- CARDS / GRID ---------- */
 #ace-app .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 #ace-app .card {
@@ -1251,6 +1291,15 @@ function playerAvatarHtml(p, size){
   const initials = p ? p.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() : '?';
   return `<div class="avatar" style="width:${size}px;height:${size}px">${initials}</div>`;
 }
+// Igual que playerAvatarHtml, pero si el jugador viene con 3+ victorias seguidas en singles
+// lo envuelve en un halo de llamas animado ("on fire") para destacarlo en el ranking.
+function playerAvatarWithFireHtml(p, size, streak){
+  const base = playerAvatarHtml(p, size);
+  if((streak||0) >= 3){
+    return `<div class="avatar-fire-wrap" title="🔥 ${streak} victorias seguidas — ¡está en llamas!">${base}<span class="avatar-fire-emoji">🔥</span></div>`;
+  }
+  return base;
+}
 
 // ---------- CIRCUIT-WIDE FUN AWARDS ----------
 function allHeadToHeadPairs(){
@@ -1787,7 +1836,7 @@ function viewRanking(){
       <div class="rank-row ${topClass}">
         <div class="rank-pos">${i + 1}</div>
         <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
-          ${playerAvatarHtml(p, 46)}
+          ${playerAvatarWithFireHtml(p, 46, streak)}
           <div class="rank-name-block">
             <span class="rank-name">${esc(r.name)}${p && p.alias ? ` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>` : ''} ${trendBadgeHtml(trend)}</span>
             <span class="rank-meta">${(titlesByPlayer(state.tournaments, false)[r.id] || 0)} título(s) · ${p ? playerMetaShort(p) : ''} ${streakBadgeHtml(streak)}</span>
@@ -2238,6 +2287,109 @@ function playerUmpireStats(){
   return agg;
 }
 
+// ---------- RADAR DE ATRIBUTOS (Saque, Volea, Resistencia, Mentalidad, Defensa) ----------
+// Calculado 100% a partir de las estadísticas reales acumuladas por el módulo umpire
+// (playerUmpireStats), sin depender de otros jugadores, para que funcione desde el
+// primer partido arbitrado.
+function clampNum(v, min, max){ return Math.max(min, Math.min(max, v)); }
+function computePlayerAttributes(playerId){
+  const agg = playerUmpireStats()[playerId];
+  if(!agg || !agg.matchesUmpired) return null;
+
+  // Saque: combina % de games de servicio retenidos + tasa de aces por game servido.
+  const aceRate = agg.servedGames>0 ? agg.ace/agg.servedGames : 0;
+  const holdRate = agg.servedGames>0 ? agg.heldGames/agg.servedGames : 0;
+  const saque = clampNum(holdRate*70 + clampNum(aceRate,0,1)*30, 0, 100);
+
+  // Volea (ataque/definición de punto): tasa de winners sobre puntos jugados.
+  const winnerRate = agg.pointsPlayed>0 ? agg.winner/agg.pointsPlayed : 0;
+  const volea = clampNum((winnerRate/0.25)*100, 0, 100);
+
+  // Resistencia: promedio de puntos jugados por partido (aguante en partidos largos).
+  const avgPtsPerMatch = agg.matchesUmpired>0 ? agg.pointsPlayed/agg.matchesUmpired : 0;
+  const resistencia = clampNum((avgPtsPerMatch/40)*100, 0, 100);
+
+  // Mentalidad: pocos errores no forzados + capacidad de sostener el propio servicio
+  // bajo presión (no ser quebrado seguido).
+  const unfErrorRate = agg.pointsPlayed>0 ? agg.unfError/agg.pointsPlayed : 0;
+  const holdUnderPressure = agg.servedGames>0 ? 1-(agg.breaksSuffered/agg.servedGames) : 0.5;
+  const mentalidad = clampNum((1-clampNum(unfErrorRate,0,1))*50 + clampNum(holdUnderPressure,0,1)*50, 0, 100);
+
+  // Defensa: efectividad ganando puntos "normales" (rallies sin ace/winner/error), o sea
+  // solidez de fondo de cancha sin depender de golpes ganadores.
+  const defensa = agg.normalTotal>0 ? clampNum((agg.normalWon/agg.normalTotal)*100, 0, 100) : 0;
+
+  return [
+    { key:'saque', label:'Saque', value: Math.round(saque) },
+    { key:'volea', label:'Volea', value: Math.round(volea) },
+    { key:'resistencia', label:'Resistencia', value: Math.round(resistencia) },
+    { key:'mentalidad', label:'Mentalidad', value: Math.round(mentalidad) },
+    { key:'defensa', label:'Defensa', value: Math.round(defensa) },
+  ];
+}
+// Genera un gráfico de radar (pentagonal) en SVG puro a partir de una lista de
+// {label, value} con value en 0-100. Sin librerías externas.
+function radarChartSvg(attrs, opts){
+  opts = opts || {};
+  const size = opts.size || 260;
+  const cx = size/2, cy = size/2;
+  const radius = size/2 - 46;
+  const n = attrs.length;
+  const angleStep = (Math.PI*2)/n;
+  const startAngle = -Math.PI/2;
+  const pointAt = (i, pct) => {
+    const angle = startAngle + i*angleStep;
+    const r = radius * (pct/100);
+    return [cx + r*Math.cos(angle), cy + r*Math.sin(angle)];
+  };
+  const rings = [20,40,60,80,100];
+  const ringPolys = rings.map(r=>{
+    const pts = attrs.map((_,i)=>pointAt(i, r).join(',')).join(' ');
+    return `<polygon points="${pts}" fill="none" stroke="var(--line)" stroke-width="1"/>`;
+  }).join('');
+  const axisLines = attrs.map((_,i)=>{
+    const [x,y] = pointAt(i,100);
+    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+  }).join('');
+  const dataPts = attrs.map((a,i)=>pointAt(i, a.value).map(v=>v.toFixed(1)).join(',')).join(' ');
+  const dots = attrs.map((a,i)=>{
+    const [x,y] = pointAt(i,a.value);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="var(--ball)"/>`;
+  }).join('');
+  const labels = attrs.map((a,i)=>{
+    const angle = startAngle + i*angleStep;
+    const lr = radius + 30;
+    const x = cx + lr*Math.cos(angle);
+    const y = cy + lr*Math.sin(angle);
+    const cosA = Math.cos(angle);
+    const anchor = Math.abs(cosA)<0.3 ? 'middle' : (cosA>0 ? 'start' : 'end');
+    return `<text x="${x.toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="${anchor}" font-size="11" font-weight="700" fill="var(--chalk)">${esc(a.label)}</text>
+      <text x="${x.toFixed(1)}" y="${(y+11).toFixed(1)}" text-anchor="${anchor}" font-size="10" fill="var(--ball)">${a.value}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${size} ${size}" width="100%" height="${size}" style="max-width:300px;display:block;margin:0 auto;overflow:visible;">
+    ${ringPolys}
+    ${axisLines}
+    <polygon points="${dataPts}" fill="var(--ball)" fill-opacity="0.25" stroke="var(--ball)" stroke-width="2"/>
+    ${dots}
+    ${labels}
+  </svg>`;
+}
+// Tarjeta lista para insertar: título + radar (o mensaje si aún no hay datos).
+function radarCardHtml(playerId){
+  const attrs = computePlayerAttributes(playerId);
+  if(!attrs){
+    return `<div class="card radar-card" style="margin-bottom:14px;">
+      <strong>🕸️ Radar de atributos</strong>
+      <div class="tourn-meta" style="margin-top:8px;">Arbitra al menos un partido de singles en vivo para generar tu radar (Saque, Volea, Resistencia, Mentalidad, Defensa).</div>
+    </div>`;
+  }
+  return `<div class="card radar-card" style="margin-bottom:14px;">
+    <strong style="display:block;margin-bottom:2px;">🕸️ Radar de atributos</strong>
+    <div class="tourn-meta">Calculado en base a tus partidos de singles arbitrados en vivo.</div>
+    ${radarChartSvg(attrs)}
+  </div>`;
+}
+
 // Recorre TODOS los partidos de DOBLES arbitrados (en orden cronológico) y
 // arma el acumulado por PAREJA (no por jugador individual).
 function pairUmpireStats(){
@@ -2644,7 +2796,7 @@ function renderMiPerfilSingles(playerId){
   const hasData = !!real;
   const agg = real || emptyAggShape();
   const intro = hasData ? '' : `<div class="empty" style="margin-bottom:14px;">Todavía no tienes partidos de singles arbitrados. Cuando arbitren uno en vivo, tus rachas y logros van a aparecer acá. Mientras tanto, así se ve el catálogo completo de logros que puedes ir desbloqueando 👇</div>`;
-  return intro + miPerfilBlockHtml(playerId, agg, computeLeagueTitles(), playerName, 'lo logras', hasData);
+  return intro + radarCardHtml(playerId) + miPerfilBlockHtml(playerId, agg, computeLeagueTitles(), playerName, 'lo logras', hasData);
 }
 function renderMiPerfilDoubles(playerId){
   const agg = pairUmpireStats();
@@ -3848,6 +4000,7 @@ function openPlayerProfileModal(playerId){
       <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:14px;">${topRival?esc(playerName(topRival)):'—'}</div><div class="tourn-meta">Rival más jugado${topRival?` (${topRivalCount}×)`:''}</div></div>
     </div>
     ${closest ? `<div class="section-sub">🎯 Set más ajustado: ${closest.score} vs ${esc(playerName(closest.rival))} (${esc(closest.tournamentName)})</div>` : ''}
+    ${radarCardHtml(playerId)}
     <h3 style="font-size:15px;margin:14px 0 6px;color:var(--chalk);">Historial reciente</h3>
     <div class="podium">${recentRows || '<div class="tourn-meta">Sin partidos con marcador todavía.</div>'}</div>
     <div class="modal-actions">
