@@ -3473,14 +3473,13 @@ if(window.AceApp) {
 let liveMatch = null;
 
 function startLiveMatch(nameA, nameB, rules, onFinishCallback) {
-  // Inicializamos el estado del partido
   liveMatch = {
     nameA, nameB, rules, onFinishCallback,
-    ptsA: 0, ptsB: 0,     // 0, 15, 30, 40, 'AD'
-    gamesA: 0, gamesB: 0, // Games del set actual
-    setsWonA: 0, setsWonB: 0, // Sets ganados
-    sets: [],             // Historial de sets terminados ej: [[2,0], [1,2]]
-    history: [],          // Para el botón deshacer
+    ptsA: 0, ptsB: 0,
+    gamesA: 0, gamesB: 0,
+    setsWonA: 0, setsWonB: 0,
+    sets: [],
+    history: [],
     stats: { A: {ace:0, winner:0, unfError:0}, B: {ace:0, winner:0, unfError:0} }
   };
   renderLiveUmpire();
@@ -3492,17 +3491,14 @@ function renderLiveUmpire() {
     overlay = document.createElement('div');
     overlay.id = 'umpire-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:var(--court);z-index:3000;display:flex;flex-direction:column;font-family:"Work Sans",sans-serif;color:var(--chalk);';
-    // ESTA ES LA LÍNEA QUE CAMBIÓ:
     document.getElementById('ace-app').appendChild(overlay);
   }
 
   const s = liveMatch;
   const isBestOf3 = s.rules.format === 'bestOf3';
-  const targetGames = s.rules.gamesPerSet || 2; // Ejemplo: 2 games para ganar el set
+  const targetGames = s.rules.gamesPerSet || 2;
 
-  // Construir el historial de sets pasados + el set actual
   let setsHtml = s.sets.map(set => `<div style="padding:4px 12px;background:var(--court-2);border-radius:6px;font-family:'Bebas Neue';font-size:22px;">${set[0]} - ${set[1]}</div>`).join('');
-  // Set actual
   setsHtml += `<div style="padding:4px 12px;background:var(--ball);color:var(--ink);border-radius:6px;font-family:'Bebas Neue';font-size:22px;">${s.gamesA} - ${s.gamesB}</div>`;
 
   overlay.innerHTML = `
@@ -3523,12 +3519,12 @@ function renderLiveUmpire() {
 
     <!-- ZONA DE BOTONES DE JUGADORES -->
     <div style="flex:1;display:flex;flex-direction:column;padding:10px;gap:10px;">
-      <button onclick="promptPointType('A')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
+      <button onclick="AceApp.promptPointType('A')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
         <span style="font-size:14px;color:var(--muted);text-transform:uppercase;">Punto para</span>
         ${esc(s.nameA)}
       </button>
       
-      <button onclick="promptPointType('B')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
+      <button onclick="AceApp.promptPointType('B')" style="flex:1;border-radius:12px;background:var(--court-3);border:2px solid var(--line);color:var(--chalk);font-size:24px;font-weight:700;font-family:'Work Sans';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;">
         <span style="font-size:14px;color:var(--muted);text-transform:uppercase;">Punto para</span>
         ${esc(s.nameB)}
       </button>
@@ -3536,24 +3532,24 @@ function renderLiveUmpire() {
 
     <!-- FOOTER CONTROLES -->
     <div style="padding:15px;display:flex;justify-content:space-between;background:var(--court-2);border-top:1px solid var(--line);">
-      <button class="btn btn-ghost" onclick="closeLiveUmpire(false)" style="color:#E08A6E;">✕ Salir sin guardar</button>
-      <button class="btn btn-ghost" onclick="undoLastPoint()" ${s.history.length===0?'disabled':''} style="font-size:16px;">↩ Deshacer</button>
+      <button class="btn btn-ghost" onclick="AceApp.closeLiveUmpire(false)" style="color:#E08A6E;">✕ Salir sin guardar</button>
+      <button class="btn btn-ghost" onclick="AceApp.undoLastPoint()" ${s.history.length===0?'disabled':''} style="font-size:16px;">↩ Deshacer</button>
     </div>
 
-    <!-- POPUP TIPO DE PUNTO (Oculto por defecto) -->
+    <!-- POPUP TIPO DE PUNTO -->
     <div id="point-type-popup" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px);z-index:3001;flex-direction:column;justify-content:center;padding:20px;">
       <h3 id="point-type-title" style="text-align:center;color:var(--ball);margin-bottom:20px;font-size:22px;"></h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;height:40vh;">
-        <button onclick="registerPoint('ace')" style="background:var(--court-2);border:1px solid var(--line);border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+        <button onclick="AceApp.registerPoint('ace')" style="background:var(--court-2);border:1px solid var(--line);border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
           <span style="font-size:32px;">⚡</span> Ace
         </button>
-        <button onclick="registerPoint('winner')" style="background:var(--court-2);border:1px solid var(--line);border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+        <button onclick="AceApp.registerPoint('winner')" style="background:var(--court-2);border:1px solid var(--line);border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
           <span style="font-size:32px;">🎯</span> Winner
         </button>
-        <button onclick="registerPoint('error')" style="background:var(--court-2);border:1px solid #E08A6E;border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+        <button onclick="AceApp.registerPoint('error')" style="background:var(--court-2);border:1px solid #E08A6E;border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
           <span style="font-size:32px;">🤦</span> Error No Forz.
         </button>
-        <button onclick="registerPoint('normal')" style="background:var(--court-2);border:1px solid var(--line);border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+        <button onclick="AceApp.registerPoint('normal')" style="background:var(--court-2);border:1px solid var(--line);border-radius:12px;color:white;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
           <span style="font-size:32px;">🎾</span> Normal
         </button>
       </div>
@@ -3574,7 +3570,6 @@ function promptPointType(side) {
 function registerPoint(type) {
   document.getElementById('point-type-popup').style.display = 'none';
   
-  // Guardamos el estado actual en el historial para poder deshacer
   liveMatch.history.push(JSON.parse(JSON.stringify({
     ptsA: liveMatch.ptsA, ptsB: liveMatch.ptsB,
     gamesA: liveMatch.gamesA, gamesB: liveMatch.gamesB,
@@ -3582,10 +3577,8 @@ function registerPoint(type) {
     sets: liveMatch.sets, stats: liveMatch.stats
   })));
 
-  // Registrar estadística
   if(type !== 'normal') {
     if(type === 'error') {
-      // Si fue error, la estadística se le suma al rival
       const rival = pendingSide === 'A' ? 'B' : 'A';
       liveMatch.stats[rival].unfError++;
     } else {
@@ -3593,7 +3586,6 @@ function registerPoint(type) {
     }
   }
 
-  // Lógica de puntuación del Tenis
   const winner = pendingSide;
   const loser = pendingSide === 'A' ? 'B' : 'A';
   const wPts = liveMatch[`pts${winner}`];
@@ -3602,7 +3594,7 @@ function registerPoint(type) {
   if (wPts === 40 && lPts === 40) {
     liveMatch[`pts${winner}`] = 'AD';
   } else if (wPts === 40 && lPts === 'AD') {
-    liveMatch[`pts${loser}`] = 40; // Vuelve a Deuce
+    liveMatch[`pts${loser}`] = 40; 
   } else if (wPts === 40 || wPts === 'AD') {
     winGame(winner);
   } else {
@@ -3616,10 +3608,8 @@ function registerPoint(type) {
 function winGame(side) {
   liveMatch.ptsA = 0; liveMatch.ptsB = 0;
   liveMatch[`games${side}`]++;
-
   const targetGames = liveMatch.rules.gamesPerSet || 2;
   
-  // Gana el set si llega a los games requeridos (Ej: a 2 games, puede ser 2-0 o 2-1)
   if (liveMatch[`games${side}`] >= targetGames) {
     winSet(side);
   }
@@ -3649,14 +3639,8 @@ function undoLastPoint() {
 }
 
 function finishMatch() {
-  // Agregamos el último set (que ya está en 0-0 por la función winSet)
-  // al marcador final para mandarlo a la base de datos
   const finalSets = [...liveMatch.sets];
-  
-  // Cerramos el overlay
   closeLiveUmpire(true);
-
-  // Ejecutamos el callback pasando el marcador final y las estadísticas
   if(liveMatch.onFinishCallback) {
     liveMatch.onFinishCallback(finalSets, liveMatch.stats);
   }
@@ -3671,9 +3655,13 @@ function closeLiveUmpire(finished = false) {
   liveMatch = null;
 }
 
-// Exponemos funciones globales si las llegamos a necesitar
+// Exponemos las funciones para que el HTML pueda clickearlas
 window.AceApp = window.AceApp || {};
 window.AceApp.startLiveMatch = startLiveMatch;
+window.AceApp.promptPointType = promptPointType;
+window.AceApp.registerPoint = registerPoint;
+window.AceApp.undoLastPoint = undoLastPoint;
+window.AceApp.closeLiveUmpire = closeLiveUmpire;
   bootApp();
 })();
 </script>
