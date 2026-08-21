@@ -3715,11 +3715,14 @@ function openPlayerProfileModal(playerId){
   let topRival = null, topRivalCount = 0;
   Object.entries(rivalCount).forEach(([id,c])=>{ if(c>topRivalCount){ topRivalCount=c; topRival=id; } });
 
-  const recentRows = results.slice(-8).reverse().map(r=>`
-    <div class="podium-row" style="padding:8px 0;">
-      <span>${r.date} · ${esc(r.label)}</span>
-      <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✅ Victoria':'❌ Derrota'}</span>
-    </div>`).join('');
+  const recentRows = results.slice(-8).reverse().map(r => `
+  <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
+    <span>${r.date} · ${esc(r.label)}</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✔ Victoria':'❌ Derrota'}</span>
+      ${r.matchId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${r.matchId}')">📲 Tarjeta</button>` : ''}
+    </div>
+  </div>`).join('');
 
   const liveEntry = Object.values(state.liveMatches || {}).find(m => (m.participantsA||[]).includes(playerId) || (m.participantsB||[]).includes(playerId));
 
