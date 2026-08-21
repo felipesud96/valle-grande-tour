@@ -658,14 +658,14 @@ const INITIAL_DATA = {
     }
   ],
   "achievements": [],
-  "expenses": []
+  "expenses": [],
+  "challenges": [],
 };
-
 async function seedIfEmpty() {
   await authReady;
-  const snap = await withRetry(() => db.collection('shared').doc('players').get());
+  const keys = ['players','tournaments','doubles','achievements','expenses', 'challenges'];
   if (!snap.exists) {
-    const keys = ['players','tournaments','doubles','achievements','expenses'];
+    const keys = ['players','tournaments','doubles','achievements','expenses', 'challenges'];
     for (const k of keys) {
       const value = INITIAL_DATA[k] || [];
       await withRetry(() => db.collection('shared').doc(k).set({ value }));
@@ -751,6 +751,7 @@ async function loadAll(){
   state.isAdmin = await safeGet('is-admin', false, false);
   state.matchRules = await safeGet('match-rules', {format:'single', gamesPerSet:3});
   const tierFees = await safeGet('tier-fees', null);
+  state.challenges = await safeGet('challenges', []);
   if(tierFees){
     TIERS.forEach(t=>{ if(tierFees[t.id]!=null) t.fee = tierFees[t.id]; });
   }
