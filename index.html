@@ -862,6 +862,38 @@ function doublesPointsByPlayer() {
   return pts;
 }
 
+// Puntos totales acumulados por PAREJA (no por jugador individual), jugando juntos.
+// Se usa para el GOAT de Dobles: la pareja con más puntos sumados jugando en equipo.
+function doublesPointsByPairMap(){
+  const pts = {};
+  const add = (ids, points, date) => {
+    if(!ids || ids.length!==2 || isPointsExpired(date)) return;
+    const key = pairKeyOf(ids);
+    pts[key] = (pts[key]||0) + points;
+  };
+  state.doubles.forEach(t=>{
+    if(t.bracket){
+      t.bracket.flat().forEach(m=>{
+        if(m.sets && m.p1!=null && m.p2!=null){
+          let g1=0, g2=0;
+          m.sets.forEach(s=>{ g1 += Number(s[0])||0; g2 += Number(s[1])||0; });
+          add(t.pairs[Number(m.p1)]||[], g1, t.date);
+          add(t.pairs[Number(m.p2)]||[], g2, t.date);
+        }
+      });
+    }
+  });
+  (state.casualMatches||[]).forEach(m=>{
+    if(m.mode==='doubles'){
+      let gA=0, gB=0;
+      (m.sets||[]).forEach(s=>{ gA += Number(s[0])||0; gB += Number(s[1])||0; });
+      add(m.sideA, gA, m.date);
+      add(m.sideB, gB, m.date);
+    }
+  });
+  return pts;
+}
+
 // Puntos que un jugador está por perder en los próximos POINTS_WARNING_DAYS días.
 function pointsExpiringSoon(playerId, isDoubles){
   const events = isDoubles ? doublesPointEvents() : singlesPointEvents();
@@ -1329,7 +1361,7 @@ function circuitAwards(){
   // 1. El GOAT (Más puntos totales)
   let goat = null, maxPts = -1;
   state.players.forEach(p => { const t = (sPts[p.id]||0) + (dPts[p.id]||0); if(t > maxPts) { maxPts = t; goat = p; }});
-  if(goat && maxPts > 0) list.push({emoji:'🐐', title:'El GOAT', who:esc(goat.name), desc:`El jugador con más puntos totales acumulados en la historia (${maxPts} pts).`});
+  if(goat && maxPts > 0) list.push({emoji:'🐐', title:'El GOAT del Circuito', who:esc(goat.name), desc:`El jugador con más puntos totales acumulados entre singles y dobles combinados (${maxPts} pts). Mira "Logros Singles" y "Logros Dobles" para ver el GOAT de cada disciplina por separado.`});
 
   // 2. El Emperador (Mayor % de victorias, min 3 partidos)
   let emp = null, maxPct = -1;
@@ -1989,9 +2021,11 @@ function computeSideMatchStats(liveStats, side){
   };
 }
 
-// Combina las stats de un partido (por lado) en el acumulado de cada jugador/pareja participante
-function accumulatePlayerFromSide(agg, id, sideStats){
-  if(!agg[id]) agg[id] = {
+// Esqueleto vacío de acumulado (mismo shape que usa accumulatePlayerFromSide). Se usa
+// para poder pintar el catálogo completo de logros como "bloqueados" cuando un jugador
+// o pareja todavía no tiene ningún partido arbitrado, en vez de esconder la sección.
+function emptyAggShape(){
+  return {
     ace:0, winner:0, unfError:0, pointsPlayed:0, pointsWon:0, normalWon:0, normalTotal:0,
     servedGames:0, heldGames:0, breaksAchieved:0, breaksSuffered:0,
     matchesUmpired:0,
@@ -2000,8 +2034,13 @@ function accumulatePlayerFromSide(agg, id, sideStats){
     matchMin: { unfErrorRate: Infinity },
     unlocked: {},
     unlockEvents: {},
-    lastMatch: null // { cur, date, label } del último partido arbitrado en orden cronológico
+    lastMatch: null
   };
+}
+
+// Combina las stats de un partido (por lado) en el acumulado de cada jugador/pareja participante
+function accumulatePlayerFromSide(agg, id, sideStats){
+  if(!agg[id]) agg[id] = emptyAggShape();
   const a = agg[id];
   a.ace += sideStats.ace; a.winner += sideStats.winner; a.unfError += sideStats.unfError;
   a.pointsPlayed += sideStats.pointsPlayed; a.pointsWon += sideStats.pointsWon;
@@ -2131,7 +2170,17 @@ function computeLeagueTitlesFor(agg, matchesList){
       ranked.push({ id, v });
     });
     ranked.sort((x,y)=> def.direction==='min' ? x.v-y.v : y.v-x.v);
-    if(ranked.length===0) return;
+    if(ranked.length===0){
+      // Nadie califica todavía: igual mostramos el título como "sin dueño" para que
+      // se pueda ver y motive a perseguirlo, en vez de esconderlo por completo.
+      results.push({
+        key:def.key, e:def.e, t:def.t, d:def.d, category:def.category,
+        holderId:null, value:null, display:null,
+        runnerUpId:null, runnerUpValue:null, runnerUpDisplay:null,
+        direction: def.direction, fmt: def.fmt
+      });
+      return;
+    }
     const winner = ranked[0], runnerUp = ranked[1] || null;
     results.push({
       key:def.key, e:def.e, t:def.t, d:def.d, category:def.category,
@@ -2158,11 +2207,40 @@ function computeLeagueTitlesFor(agg, matchesList){
   });
   if(worstId!==null && worstVal>0){
     results.push({ key:regaderaDef.key, e:regaderaDef.e, t:regaderaDef.t, d:regaderaDef.d, category:regaderaDef.category, holderId:worstId, value:worstVal, display:regaderaDef.fmt(worstVal), runnerUpId:null });
+  } else {
+    results.push({ key:regaderaDef.key, e:regaderaDef.e, t:regaderaDef.t, d:regaderaDef.d, category:regaderaDef.category, holderId:null, value:null, display:null, runnerUpId:null });
   }
   return results;
 }
-function computeLeagueTitles(){ return computeLeagueTitlesFor(playerUmpireStats(), allUmpiredSinglesMatches()); }
-function computePairLeagueTitles(){ return computeLeagueTitlesFor(pairUmpireStats(), allUmpiredDoublesMatches()); }
+
+// ---------- GOAT · Singles y GOAT · Dobles (por puntos totales de ranking) ----------
+// Título especial, separado del motor de rachas/umpire: se basa en los puntos de
+// ranking (games ganados en torneos + partidos libres), igual que el resto del circuito.
+// Se calcula por separado para singles (por jugador) y dobles (por PAREJA como equipo),
+// y se inyecta como un título más dentro de su categoría 'goat' para que aparezca en la
+// grilla de títulos de cada subcategoría y también en "Mi perfil".
+function goatTitleFromPoints(pts, key, title, desc){
+  const ranked = Object.keys(pts).map(id=>({id, v:pts[id]})).filter(r=>r.v>0).sort((a,b)=>b.v-a.v);
+  const base = { key, e:'🐐', t:title, d:desc, category:'goat', direction:'max', fmt:v=>`${v} pts` };
+  if(ranked.length===0){
+    return { ...base, holderId:null, value:null, display:null, runnerUpId:null, runnerUpValue:null, runnerUpDisplay:null };
+  }
+  const winner = ranked[0], runnerUp = ranked[1] || null;
+  return { ...base, holderId:winner.id, value:winner.v, display:`${winner.v} pts`,
+    runnerUpId: runnerUp ? runnerUp.id : null,
+    runnerUpValue: runnerUp ? runnerUp.v : null,
+    runnerUpDisplay: runnerUp ? `${runnerUp.v} pts` : null };
+}
+function computeSinglesGoatTitle(){
+  return goatTitleFromPoints(singlesPointsByPlayer(), 'goatSingles', 'El GOAT · Singles',
+    'El jugador con más puntos totales acumulados en singles (suma de games ganados en torneos y partidos libres).');
+}
+function computeDoublesGoatTitle(){
+  return goatTitleFromPoints(doublesPointsByPairMap(), 'goatDoubles', 'El GOAT · Dobles',
+    'La pareja con más puntos totales acumulados jugando junta en dobles (suma de games ganados en torneos y partidos libres).');
+}
+function computeLeagueTitles(){ return [computeSinglesGoatTitle(), ...computeLeagueTitlesFor(playerUmpireStats(), allUmpiredSinglesMatches())]; }
+function computePairLeagueTitles(){ return [computeDoublesGoatTitle(), ...computeLeagueTitlesFor(pairUmpireStats(), allUmpiredDoublesMatches())]; }
 
 // ---------- VIEW: ACHIEVEMENTS ----------
 function viewAchievements(){
@@ -2241,7 +2319,7 @@ function renderSinglesAchSubtab(){
   const search = (state.achSearch||'').trim().toLowerCase();
   let titles = computeLeagueTitles();
   if(cat!=='all') titles = titles.filter(t=>t.category===cat);
-  if(search) titles = titles.filter(t=> playerName(t.holderId).toLowerCase().includes(search));
+  if(search) titles = titles.filter(t=> t.holderId && playerName(t.holderId).toLowerCase().includes(search));
 
   const agg = playerUmpireStats();
   let withStats = state.players.filter(p=>agg[p.id]);
@@ -2249,12 +2327,11 @@ function renderSinglesAchSubtab(){
 
   return `
     <h3 style="font-size:16px;margin:0 0 4px;color:var(--chalk);">Títulos de liga · Singles (se roban 👑)</h3>
-    <div class="section-sub" style="margin-top:-2px;">Calculados en base a los partidos de singles arbitrados en vivo. Cuando alguien supera al dueño actual, el título pasa automáticamente a su perfil.</div>
+    <div class="section-sub" style="margin-top:-2px;">Incluye el 🐐 GOAT de Singles (puntos totales de ranking) y los títulos calculados en base a los partidos arbitrados en vivo. Se muestran todos, aunque todavía nadie los tenga, para que sepas qué perseguir. Cuando alguien supera al dueño actual, el título pasa automáticamente a su perfil.</div>
     ${achChipsHtml(cat)}
     ${achSearchHtml(state.achSearch||'', 'Buscar jugador…')}
-    ${umpiredCount===0
-      ? `<div class="empty">Todavía no hay partidos de singles arbitrados en vivo con estadísticas. Usa "🔴 Arbitrar en vivo" en un partido para empezar a generar títulos.</div>`
-      : titlesGridHtml(titles, playerName)}
+    ${umpiredCount===0 ? `<div class="tourn-meta" style="margin-bottom:10px;">💡 Todavía no hay partidos de singles arbitrados en vivo con estadísticas. Usa "🔴 Arbitrar en vivo" en un partido para empezar a repartir los títulos calculados por umpire (el GOAT de Singles sí puede tener dueño desde ya, si hay partidos de ranking jugados).</div>` : ''}
+    ${titlesGridHtml(titles, playerName)}
     <h3 style="font-size:16px;margin:26px 0 4px;color:var(--chalk);">Insignias de umpire · Singles</h3>
     ${umpiredCount===0
       ? `<div class="empty">Arbitra un partido de singles en vivo (⚡ Ace, 🎯 Winner, 🤦 Error, 🎾 Normal) para empezar a desbloquear rachas e insignias.</div>`
@@ -2270,7 +2347,7 @@ function renderDoublesAchSubtab(){
   const search = (state.achSearch||'').trim().toLowerCase();
   let titles = computePairLeagueTitles();
   if(cat!=='all') titles = titles.filter(t=>t.category===cat);
-  if(search) titles = titles.filter(t=> pairLabel(t.holderId).toLowerCase().includes(search));
+  if(search) titles = titles.filter(t=> t.holderId && pairLabel(t.holderId).toLowerCase().includes(search));
 
   const agg = pairUmpireStats();
   let keys = Object.keys(agg);
@@ -2279,11 +2356,11 @@ function renderDoublesAchSubtab(){
   return `
     <div class="section-sub" style="margin-top:-2px;">Se premia a la PAREJA como equipo, nunca a un jugador suelto — el umpire no distingue quién de los dos tocó cada pelota. Nunca se mezcla con las estadísticas de singles.</div>
     <h3 style="font-size:16px;margin:14px 0 4px;color:var(--chalk);">Títulos de liga · Dobles (se roban 👑)</h3>
+    <div class="section-sub" style="margin-top:-4px;">Incluye el 🐐 GOAT de Dobles (puntos totales que la pareja acumuló jugando junta) y los títulos calculados por umpire. Se muestran todos, aunque todavía nadie los tenga.</div>
     ${achChipsHtml(cat)}
     ${achSearchHtml(state.achSearch||'', 'Buscar pareja…')}
-    ${umpiredCount===0
-      ? `<div class="empty">Todavía no hay partidos de dobles arbitrados en vivo con estadísticas. Usa "🔴 Arbitrar en vivo" en un partido de dobles para empezar a generar títulos de pareja.</div>`
-      : titlesGridHtml(titles, pairLabel)}
+    ${umpiredCount===0 ? `<div class="tourn-meta" style="margin-bottom:10px;">💡 Todavía no hay partidos de dobles arbitrados en vivo con estadísticas. Usa "🔴 Arbitrar en vivo" en un partido de dobles para empezar a repartir los títulos calculados por umpire.</div>` : ''}
+    ${titlesGridHtml(titles, pairLabel)}
     <h3 style="font-size:16px;margin:26px 0 4px;color:var(--chalk);">Insignias de umpire · Dobles</h3>
     ${umpiredCount===0
       ? `<div class="empty">Arbitra un partido de dobles en vivo para empezar a desbloquear rachas e insignias de pareja.</div>`
@@ -2294,17 +2371,18 @@ function renderDoublesAchSubtab(){
 
 // ---------- Sub-módulo: Mi Perfil ----------
 function renderMiPerfilSingles(playerId){
-  const agg = playerUmpireStats()[playerId];
-  if(!agg){
-    return `<div class="empty">Todavía no tienes partidos de singles arbitrados. Cuando arbitren uno en vivo, tus rachas y logros van a aparecer acá.</div>`;
-  }
-  return miPerfilBlockHtml(playerId, agg, computeLeagueTitles(), playerName, 'lo logras');
+  const real = playerUmpireStats()[playerId];
+  const hasData = !!real;
+  const agg = real || emptyAggShape();
+  const intro = hasData ? '' : `<div class="empty" style="margin-bottom:14px;">Todavía no tienes partidos de singles arbitrados. Cuando arbitren uno en vivo, tus rachas y logros van a aparecer acá. Mientras tanto, así se ve el catálogo completo de logros que puedes ir desbloqueando 👇</div>`;
+  return intro + miPerfilBlockHtml(playerId, agg, computeLeagueTitles(), playerName, 'lo logras', hasData);
 }
 function renderMiPerfilDoubles(playerId){
   const agg = pairUmpireStats();
   const myPairKeys = Object.keys(agg).filter(k=>k.split('|').includes(playerId));
   if(myPairKeys.length===0){
-    return `<div class="empty">Todavía no tienes partidos de dobles arbitrados con ninguna pareja.</div>`;
+    return `<div class="empty" style="margin-bottom:14px;">Todavía no tienes partidos de dobles arbitrados con ninguna pareja. Así se ve el catálogo de logros de pareja que pueden ir desbloqueando cuando arbitren juntos 👇</div>`
+      + miPerfilBlockHtml('preview|pending', emptyAggShape(), computePairLeagueTitles(), pairLabel, 'lo logran', false);
   }
   const titles = computePairLeagueTitles();
   return myPairKeys.map(key=>`
@@ -2313,21 +2391,25 @@ function renderMiPerfilDoubles(playerId){
       ${miPerfilBlockHtml(key, agg[key], titles, pairLabel, 'lo logran')}
     </div>`).join('');
 }
-function miPerfilBlockHtml(ownerId, agg, titles, holderLabelFn, verbSuffix){
+function miPerfilBlockHtml(ownerId, agg, titles, holderLabelFn, verbSuffix, hasData){
+  hasData = hasData !== false;
   const totalAch = Object.keys(PROFILE_ACHIEVEMENTS_DEF).length;
   const unlockedKeys = Object.keys(agg.unlocked).filter(k=>agg.unlocked[k]);
   const pct = Math.round((unlockedKeys.length/totalAch)*100);
-  const nearest = nearestLockedAchievement(agg);
-  const recent = agg.lastMatch ? agg.lastMatch.cur : null;
+  const nearest = hasData ? nearestLockedAchievement(agg) : null;
+  const recent = hasData && agg.lastMatch ? agg.lastMatch.cur : null;
 
-  const mine = titles.filter(t=>t.holderId===ownerId);
+  const mine = hasData ? titles.filter(t=>t.holderId===ownerId) : [];
   const inDanger = mine.filter(t=>{
     if(t.runnerUpId==null) return false;
     const gap = Math.abs(t.value - t.runnerUpValue);
     const rel = t.value!==0 ? gap/Math.abs(t.value) : 1;
     return rel<=0.15;
   });
-  const closeOnes = titles.filter(t=>t.holderId!==ownerId && t.runnerUpId===ownerId);
+  const closeOnes = hasData ? titles.filter(t=>t.holderId!==ownerId && t.runnerUpId===ownerId) : [];
+  // Títulos dinámicos (incluido el GOAT) que todavía nadie tiene: se muestran igual,
+  // para motivar a perseguirlos aunque nadie los haya conseguido aún.
+  const unclaimed = titles.filter(t=>t.holderId===null);
 
   const achGrid = Object.keys(PROFILE_ACHIEVEMENTS_DEF).map(key=>
     achCardHtml(key, PROFILE_ACHIEVEMENTS_DEF[key], !!agg.unlocked[key], agg.unlockEvents[key], agg, ownerId)
@@ -2352,13 +2434,17 @@ function miPerfilBlockHtml(ownerId, agg, titles, holderLabelFn, verbSuffix){
       <strong>🥈 Títulos al alcance</strong>
       ${closeOnes.map(t=>`<div class="tourn-meta" style="margin-top:4px;">${t.e} ${esc(t.t)} — líder actual ${esc(holderLabelFn(t.holderId))}: ${esc(t.display)} · tú: ${esc(t.runnerUpDisplay)}</div>`).join('')}
     </div>` : ''}
+    ${unclaimed.length ? `<div class="card" style="margin-bottom:14px;">
+      <strong>🐐 Títulos sin dueño — sé el primero</strong>
+      ${unclaimed.map(t=>`<div class="tourn-meta" style="margin-top:4px;">${t.e} ${esc(t.t)} — ${esc(t.d)}</div>`).join('')}
+    </div>` : ''}
     <div class="grid">${achGrid}</div>
   `;
 }
 
 // ---------- Helpers compartidos de la vista de Logros ----------
 function achChipsHtml(activeCat){
-  const cats = [['all','Todas'],['power','Potencia'],['defense','Defensa'],['serve','Servicio'],['shame','Hall of Shame 😅']];
+  const cats = [['all','Todas'],['goat','🐐 GOAT'],['power','Potencia'],['defense','Defensa'],['serve','Servicio'],['shame','Hall of Shame 😅']];
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;">
     ${cats.map(([key,label])=>`<button class="btn btn-sm ${activeCat===key?'btn-primary':'btn-ghost'}" onclick="AceApp.setAchCategory('${key}')">${label}</button>`).join('')}
   </div>`;
@@ -2390,23 +2476,29 @@ function pairTitlesSectionHtml(umpiredCount){
 }
 function titlesGridHtml(titles, holderLabelFn){
   if(titles.length===0){
-    return `<div class="empty">Todavía no hay suficientes datos para repartir títulos (algunos piden un mínimo de partidos o puntos), o ningún título calza con el filtro elegido.</div>`;
+    return `<div class="empty">Ningún título calza con el filtro elegido.</div>`;
   }
-  const catLabel = {power:'Potencia y Ataque', defense:'Solidez y Defensa', serve:'Servicio y Quiebres', shame:'Hall of Shame 😅'};
-  const order = ['power','defense','serve','shame'];
+  const catLabel = {goat:'🐐 El GOAT', power:'Potencia y Ataque', defense:'Solidez y Defensa', serve:'Servicio y Quiebres', shame:'Hall of Shame 😅'};
+  const order = ['goat','power','defense','serve','shame'];
   const byCat = {};
   titles.forEach(t=>{ (byCat[t.category]=byCat[t.category]||[]).push(t); });
   return order.filter(c=>byCat[c]).map(c=>`
     <div style="margin-bottom:8px;">
       <div class="tourn-meta" style="text-transform:uppercase;letter-spacing:.06em;font-size:11px;margin:10px 0 6px;">${catLabel[c]}</div>
       <div class="grid">
-        ${byCat[c].map(t=>`<div class="card award-card">
+        ${byCat[c].map(t=> t.holderId ? `<div class="card award-card">
           <div class="award-emoji">${t.e}</div>
           <div class="disp award-title">${esc(t.t)}</div>
           <div class="award-who">👑 ${esc(holderLabelFn(t.holderId))}</div>
           <div class="award-desc">${esc(t.d)}</div>
           <div class="tourn-meta" style="margin-top:6px;">Actual: ${esc(t.display)}</div>
           ${titleThreatLine(t, holderLabelFn)}
+        </div>` : `<div class="card award-card" style="opacity:0.62;">
+          <div class="award-emoji">🔓</div>
+          <div class="disp award-title">${esc(t.t)}</div>
+          <div class="award-who" style="color:var(--muted);">Nadie lo tiene todavía</div>
+          <div class="award-desc">${esc(t.d)}</div>
+          <div class="tourn-meta" style="margin-top:6px;">🎯 Cómo conseguirlo: cumple esta condición y el título será tuyo.</div>
         </div>`).join('')}
       </div>
     </div>`).join('');
