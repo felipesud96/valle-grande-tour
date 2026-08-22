@@ -22,6 +22,27 @@
   overflow: hidden;
   position: relative;
   font-size: var(--ace-text-scale, 100%);
+  transition: background 0.4s ease;
+}
+
+/* ---------- MODO SUPERFICIE (temas de cancha) ---------- */
+#ace-app[data-surface="grass"] {
+  --clay: #3A7D33;
+  --clay-dark: #285A22;
+  --clay-light: #6FBF5E;
+  --ball: #D9E24B;
+  --court: #070F08;
+  --court-2: #101C11;
+  --court-3: #182818;
+}
+#ace-app[data-surface="cement"] {
+  --clay: #2E6FB5;
+  --clay-dark: #1F4E82;
+  --clay-light: #5FA1E0;
+  --ball: #7FD1E8;
+  --court: #070A10;
+  --court-2: #101722;
+  --court-3: #17202E;
 }
 
 #ace-app * { box-sizing: border-box; }
@@ -497,6 +518,8 @@
       <div id="identity-chip"></div>
       <div id="admin-chip"></div>
       <button class="btn btn-ghost btn-sm" onclick="AceApp.toggleTextSize()" title="Cambiar tamaño de texto" aria-label="Cambiar tamaño de texto">🔤 Tamaño de texto</button>
+      <button class="btn btn-ghost btn-sm" id="surface-toggle-btn" onclick="AceApp.cycleSurface()" title="Cambiar superficie de cancha" aria-label="Cambiar superficie de cancha"></button>
+      <button class="btn btn-ghost btn-sm" id="sound-toggle-btn" onclick="AceApp.toggleSounds()" title="Activar o silenciar sonidos" aria-label="Activar o silenciar sonidos"></button>
       <input type="file" id="restore-file-input" accept="application/json" style="display:none;" onchange="AceApp.handleRestoreFile(event)">
     </div>
   </div>
@@ -748,7 +771,7 @@ const SUGGESTED_ACHIEVEMENTS = [
   { e:'🌅', t:'Madrugador', d:'El que siempre llega primero a calentar.' },
 ];
 
-let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {}, achSubTab: null, achCategory: 'all', achSearch: '' };
+let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {}, achSubTab: null, achCategory: 'all', achSearch: '', surface: 'clay', soundsOn: true };
 let tempPhoto = null; // holds base64 during player modal session
 let tempLinkAsMe = false; // whether the player modal in progress should self-link on save
 
@@ -807,6 +830,9 @@ async function loadAll(){
   if(tierPoints){
     TIERS.forEach(t=>{ if(tierPoints[t.id]) t.points = {...t.points, ...tierPoints[t.id]}; });
   }
+  state.surface = await safeGet('surface-theme', 'clay', false);
+  state.soundsOn = await safeGet('sounds-on', true, false);
+  applySurfaceTheme();
   state.loaded = true;
 }
 async function safeGet(key, fallback, shared=true){
@@ -1604,6 +1630,7 @@ function render() {
     renderFund();
     renderIdentity();
     renderAdmin();
+    applySurfaceTheme();
 
     const el = document.getElementById('section-content');
     if (!el) return;
@@ -3597,6 +3624,7 @@ async function saveMatch(btn, tid, isDoubles){
     render();
     openMatchModal(tid, isDoubles);
   });
+  playHitSound();
   aceAlert('✅ Partido guardado');
 }
 async function deleteMatch(tid, matchId, isDoubles){
@@ -3791,7 +3819,7 @@ async function saveCasualMatch(btn) {
     ok = await save('casualMatches', state.casualMatches);
     if(ok){ closeModal(); render(); } else { state.casualMatches.pop(); }
   });
-  if(ok) aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!');
+  if(ok){ playHitSound(); aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!'); }
 }
  function casualMatchesRowHtml(m){
   const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
@@ -4407,6 +4435,7 @@ async function saveResults(btn, tid){
     await save('tournaments', state.tournaments);
     closeModal(); render();
   });
+  playHitSound();
   aceAlert('✅ Resultados guardados');
 }
 
@@ -4535,6 +4564,7 @@ async function saveDoublesResults(btn, tid){
     await save('doubles', state.doubles);
     closeModal(); render();
   });
+  playHitSound();
   aceAlert('✅ Resultados guardados');
 }
 
@@ -4701,6 +4731,86 @@ function toggleTextSize(){
   app.style.setProperty('--ace-text-scale', next);
 }
 
+// ---------- MODO SUPERFICIE (Arcilla / Césped / Cemento) ----------
+const SURFACES = [
+  { id: 'clay', label: '🟧 Arcilla' },
+  { id: 'grass', label: '🟩 Césped' },
+  { id: 'cement', label: '🟦 Cemento' },
+];
+function applySurfaceTheme(){
+  const app = document.getElementById('ace-app');
+  if(!app) return;
+  app.setAttribute('data-surface', state.surface || 'clay');
+  const btn = document.getElementById('surface-toggle-btn');
+  if(btn){
+    const current = SURFACES.find(s=>s.id===(state.surface||'clay')) || SURFACES[0];
+    btn.textContent = current.label;
+  }
+  const soundBtn = document.getElementById('sound-toggle-btn');
+  if(soundBtn){
+    soundBtn.textContent = state.soundsOn ? '🔊 Sonido' : '🔇 Sonido';
+  }
+}
+async function cycleSurface(){
+  const idx = SURFACES.findIndex(s=>s.id===(state.surface||'clay'));
+  const next = SURFACES[(idx+1) % SURFACES.length];
+  state.surface = next.id;
+  applySurfaceTheme();
+  await save('surface-theme', state.surface, false);
+}
+async function toggleSounds(){
+  state.soundsOn = !state.soundsOn;
+  applySurfaceTheme();
+  await save('sounds-on', state.soundsOn, false);
+  if(state.soundsOn) playHitSound();
+}
+
+// ---------- SONIDOS DE INTERACCIÓN (golpe de raqueta) ----------
+let __aceAudioCtx = null;
+function playHitSound(){
+  if(state.soundsOn === false) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!__aceAudioCtx) __aceAudioCtx = new Ctx();
+    const ctx = __aceAudioCtx;
+    if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+
+    // Crujido corto de impacto: ruido filtrado con envolvente rápida (tipo "pock" de raqueta)
+    const bufferSize = Math.floor(ctx.sampleRate * 0.06);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++){ data[i] = (Math.random()*2-1) * (1 - i/bufferSize); }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime(2200, now);
+    bandpass.Q.value = 1.1;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.5, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    noise.connect(bandpass).connect(noiseGain).connect(ctx.destination);
+
+    // Golpe grave breve que da cuerpo al "pock"
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.08);
+    const oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(0.25, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    osc.connect(oscGain).connect(ctx.destination);
+
+    noise.start(now); noise.stop(now + 0.09);
+    osc.start(now); osc.stop(now + 0.1);
+  } catch(e){ /* silencioso: si el navegador bloquea audio, no interrumpe el flujo */ }
+}
+
 window.AceApp = {
   setTab, openPlayerModal, savePlayer, deletePlayer, handlePhoto, closeModal,
   openIdentityModal, setIdentity,
@@ -4717,6 +4827,7 @@ window.AceApp = {
   openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
   filterPlayers, setTournamentSort, onCropZoom, applyCrop, toggleTextSize,
   setAchSubTab,setProfileMode, setAchCategory, setAchSearch, toggleShowcase,
+  cycleSurface, toggleSounds,
 };
 
 // ---------- INIT ----------
@@ -5322,6 +5433,7 @@ async function confirmChallenge(toId) {
 
   await save('challenges', state.challenges);
   render();
+  playHitSound();
   aceAlert('¡Desafío enviado con éxito! ⚔️');
 }
 async function updateChallengeStatus(challengeId, newStatus) {
