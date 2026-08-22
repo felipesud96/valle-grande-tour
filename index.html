@@ -313,6 +313,38 @@
 #ace-app .badge-emoji { font-size: 16px; }
 #ace-app .card-actions { display:flex; gap: 6px; justify-content:center; margin-top: 12px; }
 
+/* ---------- TERMÓMETRO DE FORMA (últimos 5 partidos) ---------- */
+#ace-app .form-tracker-wrap { margin: 14px 0; text-align:center; }
+#ace-app .form-tracker-label { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+#ace-app .form-tracker { display:flex; justify-content:center; align-items:center; gap: 8px; position:relative; }
+#ace-app .form-dot {
+  width: 18px; height: 18px; border-radius: 50%; display:inline-block; flex-shrink:0;
+  border: 1px solid var(--line); box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+#ace-app .form-dot.win { background: #3DDC84; box-shadow: 0 0 8px rgba(61,220,132,0.55); }
+#ace-app .form-dot.loss { background: #E0524A; box-shadow: 0 0 6px rgba(224,82,74,0.4); opacity:0.9; }
+#ace-app .form-tracker-explode .form-dot.win {
+  animation: ace-form-pulse 0.9s ease-in-out infinite;
+}
+#ace-app .form-tracker-explode .form-dot:nth-child(2) { animation-delay: 0.08s; }
+#ace-app .form-tracker-explode .form-dot:nth-child(3) { animation-delay: 0.16s; }
+#ace-app .form-tracker-explode .form-dot:nth-child(4) { animation-delay: 0.24s; }
+#ace-app .form-tracker-explode .form-dot:nth-child(5) { animation-delay: 0.32s; }
+#ace-app .form-tracker-boom {
+  font-size: 24px; margin-left: 4px;
+  animation: ace-form-boom-pop 0.6s cubic-bezier(.34,1.56,.64,1);
+}
+#ace-app .form-tracker-caption { font-size: 12px; color: #3DDC84; margin-top: 6px; font-weight: 700; }
+@keyframes ace-form-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); box-shadow: 0 0 14px rgba(61,220,132,0.85); }
+}
+@keyframes ace-form-boom-pop {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  60% { transform: scale(1.5) rotate(12deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
 /* ---------- TOURNAMENTS ---------- */
 #ace-app .tourn-card { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--court-2); margin-bottom: 14px; }
 #ace-app .tourn-top { padding: 14px 16px; display:flex; justify-content: space-between; align-items:flex-start; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid var(--line);}
@@ -1280,6 +1312,23 @@ function currentStreak(playerId){
     if(results[i].won===lastWon) streak++; else break;
   }
   return lastWon ? streak : -streak;
+}
+
+// ---------- TERMÓMETRO DE FORMA (últimos 5 partidos) ----------
+// Muestra 5 círculos 🟢/🔴 con el resultado de los últimos partidos.
+// Si el jugador ganó los 5 últimos, el termómetro "estalla" (animación + 💥).
+function formTrackerHtml(playerId){
+  const results = singlesMatchResultsForPlayer(playerId);
+  if(!results.length) return '';
+  const last5 = results.slice(-5); // ya vienen ordenados de más antiguo a más reciente
+  const dots = last5.map(r => `<span class="form-dot ${r.won?'win':'loss'}" title="${esc(r.date)} · ${r.won?'Victoria':'Derrota'} · ${esc(r.label)}"></span>`).join('');
+  const perfect = last5.length===5 && last5.every(r=>r.won);
+  return `
+    <div class="form-tracker-wrap">
+      <div class="form-tracker-label">🌡️ Termómetro de forma <span style="color:var(--muted);">(últimos ${last5.length})</span></div>
+      <div class="form-tracker${perfect?' form-tracker-explode':''}">${dots}${perfect?'<span class="form-tracker-boom">💥</span>':''}</div>
+      ${perfect?'<div class="form-tracker-caption">¡5 victorias seguidas! El termómetro estalló 🔥</div>':''}
+    </div>`;
 }
 
 function headToHeadRecord(idA, idB){
@@ -4441,6 +4490,7 @@ function openPlayerProfileModal(playerId){
     </div>
     ${liveEntry ? liveMatchCardHtml(liveEntry) : ''}
     ${expiring ? `<div class="section-sub" style="color:#D8A34C;">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')} si no suma más antes de esa fecha.</div>` : ''}
+    ${formTrackerHtml(playerId)}
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0;">
       <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:22px;">${wins}-${losses}</div><div class="tourn-meta">Récord (V-D)</div></div>
       <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:22px;">${titles}</div><div class="tourn-meta">Título(s)</div></div>
