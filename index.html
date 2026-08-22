@@ -4386,6 +4386,17 @@ function generateMatchCardHtml(match) {
 
   const textSummary = `🎾 *RESULTADO CIRCUITO ACE* 🎾\n\n🏆 *Ganador:* ${winnerName || 'N/A'}\n⚔️ ${nameA} vs ${nameB}\n📊 *Marcador:* ${scoreline}\n📅 *Fecha:* ${match.date || 'Reciente'}\n\n¡Seguimos sumando en el ranking! 🚀`;
 
+  // Botón de "Revancha rápida": solo tiene sentido en partidos de singles ya finalizados
+  // donde el usuario actual identificado fue uno de los dos rivales.
+  let rematchBtn = '';
+  if (winnerSide && (match.sideA || []).length === 1 && (match.sideB || []).length === 1 && state.myPlayerId) {
+    const aId = match.sideA[0], bId = match.sideB[0];
+    const rivalId = aId === state.myPlayerId ? bId : (bId === state.myPlayerId ? aId : null);
+    if (rivalId) {
+      rematchBtn = `<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;" onclick="AceApp.closeModal(); AceApp.issueChallenge('${rivalId}')">⚡ Revancha rápida vs ${esc(playerName(rivalId))}</button>`;
+    }
+  }
+
   return `
     <div id="match-card-export" style="background:var(--court);border:2px solid var(--ball);border-radius:12px;padding:16px;color:var(--chalk);max-width:340px;margin:10px auto;text-align:center;">
       <div style="font-size:11px;letter-spacing:1px;color:var(--ball);text-transform:uppercase;font-weight:700;">Circuito Ace · Resultado Oficial</div>
@@ -4410,6 +4421,7 @@ function generateMatchCardHtml(match) {
       <button class="btn btn-ball btn-sm" style="width:100%;margin-top:8px;" onclick="navigator.clipboard.writeText(\`${textSummary}\`); aceAlert('¡Resumen copiado al portapapeles para WhatsApp! 📲');">
         📲 Copiar para WhatsApp
       </button>
+      ${rematchBtn}
     </div>
   `;
 }
