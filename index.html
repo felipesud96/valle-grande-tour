@@ -2752,9 +2752,11 @@ function viewAchievements(){
   if(typeof render === 'function') render();
 }
   function viewChallenges() {
+  const votingSection = renderVotingSection();
   if (!state.myPlayerId) {
     return `
       <div class="section-head"><h2>⚔️ Desafíos de Cancha</h2></div>
+      ${votingSection}
       <div class="empty">
         <span class="disp">Debes identificarte primero</span>
         Para gestionar tus desafíos, haz clic en el botón superior <strong>"👤 Identifícate o regístrate"</strong>.
@@ -2771,6 +2773,7 @@ function viewAchievements(){
     <div class="section-sub">
       Gestiona las retas oficiales con tus rivales (${esc(p ? p.name : '')}). Para enviar un nuevo desafío, ve a la pestaña <strong>Jugadores</strong> y presiona <strong>⚔️ Desafiar</strong> en el perfil de tu rival.
     </div>
+    ${votingSection}
     ${desafiosHtml || `
       <div class="empty">
         <span class="disp">Sin desafíos activos</span>
@@ -2779,6 +2782,61 @@ function viewAchievements(){
       </div>
     `}
   `;
+}
+// Lista comunitaria de partidos aceptados (aún no jugados) sobre los que cualquier
+// jugador puede entrar a "la tarjeta" y votar por quién cree que va a ganar.
+function renderVotingSection() {
+  const pending = (state.challenges || []).filter(c => c.status === 'accepted');
+  if (pending.length === 0) return '';
+  const rows = pending.map(c => {
+    const votes = c.votes || {};
+    const total = Object.keys(votes).length;
+    return `<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="AceApp.openMatchVoteModal('${c.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-size:14px;font-weight:700;">🎾 ${esc(playerName(c.fromId))} <span style="color:var(--muted);font-weight:400;">vs</span> ${esc(playerName(c.toId))}</span>
+        <span class="tourn-meta" style="white-space:nowrap;">${total ? `${total} voto${total===1?'':'s'}` : 'Sin votos aún'}</span>
+      </div>
+      <div class="tourn-meta" style="margin-top:2px;">${c.date ? '📅 ' + esc(c.date) : 'Fecha por confirmar'} · toca para ver la tarjeta y votar 🗳️</div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-bottom:20px;">
+      <h4 style="margin:0 0 4px;color:var(--ball);font-size:16px;">🗳️ Vota por los próximos partidos</h4>
+      <div class="tourn-meta" style="margin-bottom:12px;">Entra a la tarjeta de cualquier partido pendiente y vota por quién crees que va a ganar. La barra se actualiza con los votos de toda la comunidad.</div>
+      ${rows}
+    </div>`;
+}
+// Barra de progreso + botones de voto para un desafío aceptado (partido no jugado).
+// Se reutiliza tanto en la tarjeta del modal como donde haga falta.
+function voteBarHtml(c) {
+  const votes = c.votes || {};
+  const counts = {};
+  Object.values(votes).forEach(pid => { counts[pid] = (counts[pid] || 0) + 1; });
+  const total = Object.keys(votes).length;
+  const aId = c.fromId, bId = c.toId;
+  const aCount = counts[aId] || 0, bCount = counts[bId] || 0;
+  const pctA = total ? Math.round((aCount / total) * 100) : 50;
+  const pctB = total ? 100 - pctA : 50;
+  const myVote = state.myPlayerId ? votes[state.myPlayerId] : null;
+  const isParticipant = !!state.myPlayerId && (state.myPlayerId === aId || state.myPlayerId === bId);
+  const canVote = !!state.myPlayerId && !isParticipant;
+  return `
+    <div style="margin:10px 0;text-align:left;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;font-size:13px;margin-bottom:6px;">
+        <span style="color:${(total && pctA>=pctB) ? 'var(--ball)':'var(--chalk)'};">${esc(playerName(aId))}${total?` · ${pctA}%`:''}</span>
+        <span style="color:${(total && pctB>pctA) ? 'var(--ball)':'var(--chalk)'};">${total?`${pctB}% · `:''}${esc(playerName(bId))}</span>
+      </div>
+      <div style="background:var(--court-3);border-radius:8px;height:14px;overflow:hidden;display:flex;">
+        <div style="background:var(--ball);width:${pctA}%;transition:width .3s;"></div>
+        <div style="background:var(--clay-light);width:${pctB}%;transition:width .3s;"></div>
+      </div>
+      <div class="tourn-meta" style="margin-top:6px;">${total ? `${total} voto${total===1?'':'s'} de la comunidad` : 'Todavía nadie ha votado — ¡sé el primero!'}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn ${myVote===aId?'btn-ball':'btn-ghost'} btn-sm" style="flex:1;" onclick="AceApp.voteMatch('${c.id}','${aId}')" ${canVote?'':'disabled'}>🗳️ ${esc(playerName(aId))}</button>
+        <button class="btn ${myVote===bId?'btn-ball':'btn-ghost'} btn-sm" style="flex:1;" onclick="AceApp.voteMatch('${c.id}','${bId}')" ${canVote?'':'disabled'}>🗳️ ${esc(playerName(bId))}</button>
+      </div>
+      ${!state.myPlayerId ? `<div class="tourn-meta" style="margin-top:6px;color:#D8A34C;">Identifícate arriba para poder votar.</div>` : (isParticipant ? `<div class="tourn-meta" style="margin-top:6px;color:#D8A34C;">Como juegas este partido, no puedes votar en él 😉</div>` : '')}
+    </div>`;
 }
   function renderDesafiosPerfil(playerId) {
   if (!playerId) return '';
@@ -5598,13 +5656,59 @@ async function confirmChallenge(toId) {
     toId: toId,
     date: dateVal,
     status: 'pending',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    votes: {}
   });
 
   await save('challenges', state.challenges);
   render();
   playHitSound();
   aceAlert('¡Desafío enviado con éxito! ⚔️');
+}
+// Abre la "tarjeta" de un partido no jugado (desafío aceptado) con la barra de
+// votación de la comunidad para elegir quién creen que va a ganar.
+function openMatchVoteModal(challengeId) {
+  const c = (state.challenges || []).find(x => x.id === challengeId);
+  if (!c) return aceAlert("No se encontró el partido.");
+  const html = `
+    <button class="close-x" onclick="AceApp.closeModal()">×</button>
+    <div style="background:var(--court);border:2px solid var(--ball);border-radius:12px;padding:16px;color:var(--chalk);max-width:340px;margin:10px auto;text-align:center;">
+      <div style="font-size:11px;letter-spacing:1px;color:var(--ball);text-transform:uppercase;font-weight:700;">Circuito Ace · Partido por jugar</div>
+      <div style="font-size:13px;color:var(--muted);margin:8px 0;">${c.date ? '📅 ' + esc(c.date) : 'Fecha por confirmar'}</div>
+      <div style="display:flex;justify-content:space-around;align-items:center;margin:15px 0;">
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">${esc(playerName(c.fromId))}</div></div>
+        <div style="font-size:14px;font-weight:900;color:var(--ball);padding:0 8px;">VS</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">${esc(playerName(c.toId))}</div></div>
+      </div>
+      ${voteBarHtml(c)}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button>
+    </div>`;
+  openModal(html);
+}
+// Registra (o cambia/retira) el voto del jugador identificado sobre quién ganará
+// un partido todavía no jugado.
+async function voteMatch(challengeId, pickId) {
+  if (!state.myPlayerId) return aceAlert("Identifícate arriba para votar por tu favorito. 🗳️");
+  const c = (state.challenges || []).find(x => x.id === challengeId);
+  if (!c) return;
+  if (state.myPlayerId === c.fromId || state.myPlayerId === c.toId) {
+    // Los dos protagonistas del partido no pueden votar en su propio duelo.
+    return aceAlert("Como juegas este partido, no puedes votar en él 😉");
+  }
+  c.votes = c.votes || {};
+  if (c.votes[state.myPlayerId] === pickId) {
+    delete c.votes[state.myPlayerId]; // volver a tocar el mismo pick retira el voto
+  } else {
+    c.votes[state.myPlayerId] = pickId;
+  }
+  await save('challenges', state.challenges);
+  render();
+  if (document.getElementById('ace-overlay')) {
+    closeModal();
+    openMatchVoteModal(challengeId);
+  }
 }
 async function updateChallengeStatus(challengeId, newStatus) {
   const ch = state.challenges.find(c => c.id === challengeId);
@@ -5688,6 +5792,8 @@ window.AceApp.closeLiveUmpire = closeLiveUmpire;
 window.AceApp.clearPendingLiveStats = clearPendingLiveStats;
 window.AceApp.issueChallenge = issueChallenge;
 window.AceApp.updateChallengeStatus = updateChallengeStatus;
+window.AceApp.openMatchVoteModal = openMatchVoteModal;
+window.AceApp.voteMatch = voteMatch;
 window.AceApp.closeSeason = closeSeason;
 window.AceApp.openMatchCardModal = openMatchCardModal;
 window.AceApp.setRankingSubTab = setRankingSubTab;
