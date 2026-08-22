@@ -5212,23 +5212,65 @@ function tennisCourtSkeletonSvg(){
     <svg class="skel-court-svg" viewBox="0 0 240 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cargando circuito...">
       <defs>
         <linearGradient id="skelCourtShine" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="rgba(244,240,226,0.10)"/>
-          <stop offset="50%" stop-color="rgba(244,240,226,0.38)"/>
-          <stop offset="100%" stop-color="rgba(244,240,226,0.10)"/>
+          <stop offset="0%" stop-color="rgba(244,240,226,0.05)"/>
+          <stop offset="50%" stop-color="rgba(244,240,226,0.6)"/>
+          <stop offset="100%" stop-color="rgba(244,240,226,0.05)"/>
           <animateTransform attributeName="gradientTransform" type="translate" from="-240 0" to="240 0" dur="1.6s" repeatCount="indefinite"/>
         </linearGradient>
       </defs>
-      <g fill="none" stroke="url(#skelCourtShine)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="6" y="6" width="228" height="108" rx="3"/>
-        <line x1="6" y1="60" x2="234" y2="60"/>
-        <rect x="36" y="6" width="168" height="108"/>
-        <line x1="120" y1="34" x2="120" y2="86"/>
-        <line x1="36" y1="34" x2="204" y2="34"/>
-        <line x1="36" y1="86" x2="204" y2="86"/>
+
+      <!-- Base: trazado completo de la cancha, siempre visible y tenue, para que
+           se reconozca de inmediato como cancha de tenis (líneas de dobles, de
+           individuales, red, cuadros de servicio y línea central de servicio). -->
+      <g fill="none" stroke="rgba(244,240,226,0.16)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="8" y="8" width="224" height="104"/>
+        <rect x="28" y="8" width="184" height="104"/>
+        <line x1="8" y1="60" x2="232" y2="60"/>
       </g>
-      <circle cx="120" cy="60" r="5.5" fill="var(--ball)" opacity="0.9">
-        <animate attributeName="cy" values="60;48;60" dur="0.9s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values="0.9;0.55;0.9" dur="0.9s" repeatCount="indefinite"/>
+      <g fill="none" stroke="rgba(244,240,226,0.16)" stroke-width="2" stroke-linecap="round">
+        <line x1="28" y1="36" x2="212" y2="36"/>
+        <line x1="28" y1="84" x2="212" y2="84"/>
+        <line x1="120" y1="36" x2="120" y2="84"/>
+        <line x1="120" y1="8" x2="120" y2="14"/>
+        <line x1="120" y1="106" x2="120" y2="112"/>
+      </g>
+
+      <!-- Overlay: mismo trazado, dibujándose con brillo (efecto "tiza fresca")
+           en secuencia: cancha de dobles → individuales → red → cuadros de
+           servicio → línea central. Luego queda con un brillo perpetuo. -->
+      <g fill="none" stroke="url(#skelCourtShine)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="8" y="8" width="224" height="104" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1">
+          <animate attributeName="stroke-dashoffset" values="1;0" dur="0.8s" begin="0.1s" fill="freeze"/>
+        </rect>
+        <rect x="28" y="8" width="184" height="104" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1">
+          <animate attributeName="stroke-dashoffset" values="1;0" dur="0.7s" begin="0.5s" fill="freeze"/>
+        </rect>
+        <line x1="8" y1="60" x2="232" y2="60" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1">
+          <animate attributeName="stroke-dashoffset" values="1;0" dur="0.4s" begin="0.95s" fill="freeze"/>
+        </line>
+      </g>
+      <g fill="none" stroke="url(#skelCourtShine)" stroke-width="2" stroke-linecap="round">
+        <line x1="28" y1="36" x2="212" y2="36" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1">
+          <animate attributeName="stroke-dashoffset" values="1;0" dur="0.3s" begin="1.2s" fill="freeze"/>
+        </line>
+        <line x1="28" y1="84" x2="212" y2="84" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1">
+          <animate attributeName="stroke-dashoffset" values="1;0" dur="0.3s" begin="1.3s" fill="freeze"/>
+        </line>
+        <line x1="120" y1="36" x2="120" y2="84" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1">
+          <animate attributeName="stroke-dashoffset" values="1;0" dur="0.3s" begin="1.45s" fill="freeze"/>
+        </line>
+      </g>
+
+      <!-- Pelota que aparece cuando termina de "dibujarse" la cancha y luego
+           pelotea de un lado a otro cruzando la red, como si se la estuvieran
+           pegando (el radio también varía un poco para dar sensación de
+           profundidad: más grande cuando "viene cerca", más chica cuando "se aleja"). -->
+      <circle cx="90" cy="88" r="6" fill="var(--ball)" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.95" dur="1.7s" begin="0s" fill="freeze"/>
+        <animate attributeName="cx" values="90;150;90" keyTimes="0;0.5;1" dur="1.7s" begin="1.7s" repeatCount="indefinite"/>
+        <animate attributeName="cy" values="88;32;88" keyTimes="0;0.5;1" dur="1.7s" begin="1.7s" repeatCount="indefinite"/>
+        <animate attributeName="r" values="6;3.5;6" keyTimes="0;0.5;1" dur="1.7s" begin="1.7s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.95;0.7;0.95" keyTimes="0;0.5;1" dur="1.7s" begin="1.7s" repeatCount="indefinite"/>
       </circle>
     </svg>
   </div>`;
