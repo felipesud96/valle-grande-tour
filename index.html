@@ -4378,11 +4378,13 @@ function momentumChartSvg(match) {
     </div>`;
 }
 function generateMatchCardHtml(match) {
-  const p1 = playerById(match.p1Id || match.player1Id);
-  const p2 = playerById(match.p2Id || match.player2Id);
-  const winner = playerById(match.winnerId);
-  
-  const textSummary = `🎾 *RESULTADO CIRCUITO ACE* 🎾\n\n🏆 *Ganador:* ${winner ? winner.name : 'N/A'}\n⚔️ ${p1 ? p1.name : 'P1'} vs ${p2 ? p2.name : 'P2'}\n📊 *Marcador:* ${match.scoreline}\n📅 *Fecha:* ${match.date || 'Reciente'}\n\n¡Seguimos sumando en el ranking! 🚀`;
+  const nameA = (match.sideA || []).map(playerName).join(' / ') || 'Jugador 1';
+  const nameB = (match.sideB || []).map(playerName).join(' / ') || 'Jugador 2';
+  const scoreline = (match.sets || []).filter(s => s && (s[0] != null || s[1] != null)).map(s => `${s[0]}-${s[1]}`).join(', ') || 'Sin marcador';
+  const winnerSide = matchWinnerSide(match);
+  const winnerName = winnerSide === 'A' ? nameA : (winnerSide === 'B' ? nameB : null);
+
+  const textSummary = `🎾 *RESULTADO CIRCUITO ACE* 🎾\n\n🏆 *Ganador:* ${winnerName || 'N/A'}\n⚔️ ${nameA} vs ${nameB}\n📊 *Marcador:* ${scoreline}\n📅 *Fecha:* ${match.date || 'Reciente'}\n\n¡Seguimos sumando en el ranking! 🚀`;
 
   return `
     <div id="match-card-export" style="background:var(--court);border:2px solid var(--ball);border-radius:12px;padding:16px;color:var(--chalk);max-width:340px;margin:10px auto;text-align:center;">
@@ -4391,16 +4393,16 @@ function generateMatchCardHtml(match) {
       
       <div style="display:flex;justify-content:space-around;align-items:center;margin:15px 0;">
         <div style="flex:1;">
-          <div style="font-size:15px;font-weight:700;">${esc(p1 ? p1.name : 'Jugador 1')}</div>
+          <div style="font-size:15px;font-weight:700;${winnerSide==='A'?'color:var(--ball);':''}">${esc(nameA)}${winnerSide==='A'?' 🏆':''}</div>
         </div>
         <div style="font-size:14px;font-weight:900;color:var(--ball);padding:0 8px;">VS</div>
         <div style="flex:1;">
-          <div style="font-size:15px;font-weight:700;">${esc(p2 ? p2.name : 'Jugador 2')}</div>
+          <div style="font-size:15px;font-weight:700;${winnerSide==='B'?'color:var(--ball);':''}">${esc(nameB)}${winnerSide==='B'?' 🏆':''}</div>
         </div>
       </div>
 
       <div style="background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;font-size:18px;font-weight:800;color:var(--ball);letter-spacing:2px;margin-bottom:12px;">
-        ${esc(match.scoreline)}
+        ${esc(scoreline)}
       </div>
 
       ${momentumChartSvg(match)}
@@ -4414,16 +4416,57 @@ function generateMatchCardHtml(match) {
 
 function openMatchCardModal(matchId) {
   let match = null;
-  // Buscar en partidos libres
-  if (state.casualMatches) match = state.casualMatches.find(m => m.id === matchId);
-  
-  // Buscar en torneos
-  if (!match && state.tournaments) {
+
+  // 1) Partidos libres / desafíos jugados (casualMatches: sideA/sideB ya son arrays de ids)
+  if (state.casualMatches) {
+    const found = state.casualMatches.find(m => m.id === matchId);
+    if (found) match = { ...found };
+  }
+
+  // 2) Registro de partidos sueltos dentro de un torneo (t.matches: mismo formato sideA/sideB)
+  if (!match) {
     state.tournaments.forEach(t => {
-      if (t.matches) {
-        const found = t.matches.find(m => m.id === matchId);
-        if (found) match = { ...found, tournamentName: t.name };
-      }
+      const found = (t.matches || []).find(m => m.id === matchId);
+      if (found) match = { ...found, tournamentName: t.name, date: found.date || t.date };
+    });
+  }
+  if (!match) {
+    state.doubles.forEach(t => {
+      const found = (t.matches || []).find(m => m.id === matchId);
+      if (found) match = { ...found, tournamentName: t.name, date: found.date || t.date };
+    });
+  }
+
+  // 3) Partidos de la llave (bracket) de un torneo de singles: p1/p2 son ids sueltos
+  if (!match) {
+    state.tournaments.forEach(t => {
+      (t.bracket || []).flat().forEach(m => {
+        if (m.id === matchId) {
+          match = {
+            id: m.id,
+            sideA: m.p1 != null ? [m.p1] : [],
+            sideB: m.p2 != null ? [m.p2] : [],
+            sets: m.sets, liveStats: m.liveStats,
+            date: t.date, tournamentName: t.name
+          };
+        }
+      });
+    });
+  }
+  // 4) Partidos de la llave (bracket) de un torneo de dobles: p1/p2 son índices de pareja
+  if (!match) {
+    state.doubles.forEach(t => {
+      (t.bracket || []).flat().forEach(m => {
+        if (m.id === matchId) {
+          match = {
+            id: m.id,
+            sideA: m.p1 != null ? (t.pairs[Number(m.p1)] || []) : [],
+            sideB: m.p2 != null ? (t.pairs[Number(m.p2)] || []) : [],
+            sets: m.sets, liveStats: m.liveStats,
+            date: t.date, tournamentName: t.name
+          };
+        }
+      });
     });
   }
 
