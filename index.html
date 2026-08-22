@@ -270,6 +270,33 @@
   background: var(--court-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
 }
 #ace-app .player-card { text-align:center; position: relative; }
+#ace-app .player-card.holo {
+  --holo-x: 50%; --holo-y: 40%; --holo-op: 0;
+  overflow: hidden;
+  will-change: transform;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+#ace-app .player-card.holo::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  border-radius: inherit;
+  opacity: var(--holo-op);
+  transition: opacity 0.3s ease;
+  background:
+    radial-gradient(circle at var(--holo-x) var(--holo-y), rgba(255,255,255,0.65), transparent 42%),
+    linear-gradient(115deg,
+      rgba(255,60,150,0.4) 0%, rgba(255,200,0,0.4) 20%, rgba(80,255,180,0.4) 40%,
+      rgba(60,160,255,0.4) 60%, rgba(200,80,255,0.4) 80%, rgba(255,60,150,0.4) 100%);
+  background-size: 200% 200%, 260% 260%;
+  background-position: var(--holo-x) var(--holo-y), var(--holo-x) var(--holo-y);
+  mix-blend-mode: color-dodge;
+}
+#ace-app .player-card.holo-1 { box-shadow: 0 0 0 1px rgba(212,175,55,0.5), 0 4px 18px rgba(212,175,55,0.18); }
+#ace-app .player-card.holo-2 { box-shadow: 0 0 0 1px rgba(197,199,204,0.5), 0 4px 18px rgba(197,199,204,0.16); }
+#ace-app .player-card.holo-3 { box-shadow: 0 0 0 1px rgba(205,127,50,0.5), 0 4px 18px rgba(205,127,50,0.16); }
+#ace-app .player-card.holo .holo-tag {
+  position:absolute; top:10px; right:10px; font-size:16px; z-index:6; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
 #ace-app .player-card .avatar { width: 84px; height: 84px; margin: 0 auto 10px; font-size: 28px; }
 #ace-app .player-card h3 { font-size: 20px; margin: 0 0 2px; }
 #ace-app .player-card .rank-tag {
@@ -2102,7 +2129,11 @@ function playersGridHtml(){
     const manualAch = state.achievements.filter(a=>a.playerId===p.id);
     const manualHtml = manualAch.map(a=>`<span class="stat-pill" title="${esc(a.desc||'')}">${esc(a.emoji||'🎖️')} ${esc(a.title)}</span>`).join('');
     const canEdit = state.isAdmin || p.id===state.myPlayerId;
-    return `<div class="card player-card">
+    const holoRank = (pos>=1 && pos<=3) ? pos : 0;
+    const holoClass = holoRank ? ` holo holo-${holoRank}` : '';
+    const holoTag = holoRank ? `<span class="holo-tag">${holoRank===1?'🥇':holoRank===2?'🥈':'🥉'}</span>` : '';
+    return `<div class="card player-card${holoClass}">
+      ${holoTag}
       ${playerAvatarHtml(p,84)}
       <h3>${esc(p.name)}</h3>
       ${p.alias?`<div style="color:var(--ball);font-size:12.5px;font-style:italic;margin-bottom:4px;">"${esc(p.alias)}"</div>`:''}
@@ -2127,6 +2158,70 @@ function playersGridHtml(){
     </div>`;
   }).join('');
   return `<div class="grid">${cards}</div>`;
+}
+// ---------- TARJETAS HOLOGRÁFICAS (Top 3 del ranking) ----------
+// Al inclinar el celular (giroscopio) o mover el mouse sobre la tarjeta (escritorio),
+// se desplaza un brillo estilo "carta holográfica" sobre las tarjetas del Top 3.
+let __holoRAF = null;
+let __holoOrientationBound = false;
+let __holoPointerBound = false;
+
+function applyHoloVars(card, xPct, yPct, opacity, tiltX, tiltY){
+  card.style.setProperty('--holo-x', xPct.toFixed(1) + '%');
+  card.style.setProperty('--holo-y', yPct.toFixed(1) + '%');
+  card.style.setProperty('--holo-op', opacity);
+  card.style.transform = `perspective(700px) rotateX(${tiltX.toFixed(2)}deg) rotateY(${tiltY.toFixed(2)}deg)`;
+}
+function handleHoloOrientation(e){
+  if(__holoRAF) return;
+  __holoRAF = requestAnimationFrame(()=>{
+    __holoRAF = null;
+    const cards = document.querySelectorAll('#ace-app .player-card.holo');
+    if(!cards.length) return;
+    const beta = Math.max(-45, Math.min(45, e.beta || 0));   // inclinación adelante/atrás
+    const gamma = Math.max(-45, Math.min(45, e.gamma || 0)); // inclinación izquierda/derecha
+    const xPct = 50 + (gamma / 45) * 50;
+    const yPct = 50 + (beta / 45) * 50;
+    const tiltX = (beta / 45) * -6;
+    const tiltY = (gamma / 45) * 6;
+    cards.forEach(card => applyHoloVars(card, xPct, yPct, 0.85, tiltX, tiltY));
+  });
+}
+function handleHoloPointer(e){
+  const card = e.target.closest && e.target.closest('#ace-app .player-card.holo');
+  if(!card) return;
+  const rect = card.getBoundingClientRect();
+  const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+  const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+  const tiltX = ((yPct - 50) / 50) * -6;
+  const tiltY = ((xPct - 50) / 50) * 6;
+  applyHoloVars(card, xPct, yPct, 0.85, tiltX, tiltY);
+}
+function resetHoloCard(e){
+  const card = e.target.closest && e.target.closest('#ace-app .player-card.holo');
+  if(!card) return;
+  card.style.setProperty('--holo-op', 0);
+  card.style.transform = 'perspective(700px) rotateX(0deg) rotateY(0deg)';
+}
+async function initHolographicCards(){
+  if(!__holoPointerBound){
+    const app = document.getElementById('ace-app');
+    if(app){
+      app.addEventListener('pointermove', handleHoloPointer);
+      app.addEventListener('pointerleave', resetHoloCard, true);
+      __holoPointerBound = true;
+    }
+  }
+  if(__holoOrientationBound || !window.DeviceOrientationEvent) return;
+  const attach = ()=>{ window.addEventListener('deviceorientation', handleHoloOrientation); __holoOrientationBound = true; };
+  if(typeof DeviceOrientationEvent.requestPermission === 'function'){
+    try{
+      const res = await DeviceOrientationEvent.requestPermission();
+      if(res === 'granted') attach();
+    }catch(e){ /* se reintenta en el próximo tap en la pestaña Jugadores */ }
+  } else {
+    attach();
+  }
 }
 function filterPlayers(term){
   state.playerSearch = term;
@@ -5020,7 +5115,7 @@ async function deleteExpense(id){
   render();
 }
 
-function setTab(tab){ state.tab = tab; render();checkChallengeNotifications();}
+function setTab(tab){ state.tab = tab; render();checkChallengeNotifications(); if(tab==='players') initHolographicCards(); }
 
 // ---------- DESLIZAMIENTO (SWIPE) ENTRE PESTAÑAS EN MÓVILES ----------
 function initTabSwipe(){
@@ -5186,7 +5281,7 @@ window.AceApp = {
   openAchievementModal, saveAchievement, deleteAchievement, pickSuggested,
   togglePaid, markAllPaid, openExpenseModal, saveExpense, deleteExpense, bootApp,
   openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
-  filterPlayers, setTournamentSort, onCropZoom, applyCrop, toggleTextSize,
+  filterPlayers, setTournamentSort, onCropZoom, applyCrop, toggleTextSize, initHolographicCards,
   setAchSubTab,setProfileMode, setAchCategory, setAchSearch, toggleShowcase,
   cycleSurface, toggleSounds,
 };
