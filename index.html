@@ -4105,6 +4105,104 @@ function showH2H(){
     ${barsHtml}
     <div class="podium">${rows}</div>`;
 }
+// Gráfico de "Momentum": muestra cómo evolucionó la ventaja en games durante el partido.
+// Si el partido se arbitró en vivo usa el detalle juego a juego (match.liveStats.gameLog),
+// que es lo más fino que hay; si no, usa el resultado de cada set como respaldo (siempre
+// disponible). Ideal para detectar de un vistazo si hubo una remontada épica.
+function momentumChartSvg(match) {
+  let seq = [0];
+  let granularityLabel = '';
+  let unitLabel = '';
+  let comebackThreshold = 2;
+
+  if (match.liveStats && Array.isArray(match.liveStats.pointLog) && match.liveStats.pointLog.length) {
+    // Punto a punto: la granularidad más fina, ideal cuando se juega al mejor de
+    // pocos games por set (ahí "games" queda demasiado grueso para ver el momentum real).
+    let diff = 0;
+    match.liveStats.pointLog.forEach(pt => {
+      diff += (pt.side === 'A') ? 1 : -1;
+      seq.push(diff);
+    });
+    granularityLabel = 'punto a punto';
+    unitLabel = 'puntos';
+    comebackThreshold = 5;
+  } else if (match.liveStats && Array.isArray(match.liveStats.gameLog) && match.liveStats.gameLog.length) {
+    let diff = 0;
+    match.liveStats.gameLog.forEach(g => {
+      diff += (g.winner === 'A') ? 1 : -1;
+      seq.push(diff);
+    });
+    granularityLabel = 'juego a juego';
+    unitLabel = 'games';
+    comebackThreshold = 2;
+  } else if (Array.isArray(match.sets) && match.sets.length) {
+    let diff = 0;
+    match.sets.forEach(s => {
+      if (!s) return;
+      const a = Number(s[0]) || 0, b = Number(s[1]) || 0;
+      diff += (a - b);
+      seq.push(diff);
+    });
+    granularityLabel = 'set a set';
+    unitLabel = 'games';
+    comebackThreshold = 2;
+  } else {
+    return '';
+  }
+  if (seq.length < 2) return '';
+
+  const nameA = (match.sideA || []).map(playerName).join(' / ') || 'Lado A';
+  const nameB = (match.sideB || []).map(playerName).join(' / ') || 'Lado B';
+
+  const w = 280, h = 110, padX = 14, padY = 16;
+  const maxAbs = Math.max(1, ...seq.map(v => Math.abs(v)));
+  const n = seq.length;
+  const xStep = n > 1 ? (w - padX * 2) / (n - 1) : 0;
+  const yMid = h / 2;
+  const yScale = (h / 2 - padY) / maxAbs;
+  const pts = seq.map((v, i) => [padX + i * xStep, yMid - v * yScale]);
+  const linePts = pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+
+  const finalDiff = seq[seq.length - 1];
+  // El diferencial acumulado (sobre todo en puntos) no siempre coincide con quién
+  // ganó realmente el partido (en tenis no gana quien suma más puntos totales),
+  // así que el ganador se determina por sets, y ese es el que se usa para la nota
+  // de remontada. El diferencial solo se usa para colorear la línea del gráfico.
+  const lineColor = finalDiff > 0 ? 'var(--ball)' : (finalDiff < 0 ? '#E08A6E' : 'var(--muted)');
+  const endPt = pts[pts.length - 1];
+
+  let setsA = 0, setsB = 0;
+  (match.sets || []).forEach(s => {
+    if (!s) return;
+    const a = Number(s[0]) || 0, b = Number(s[1]) || 0;
+    if (a > b) setsA++; else if (b > a) setsB++;
+  });
+  const winnerSide = setsA > setsB ? 'A' : (setsB > setsA ? 'B' : (finalDiff > 0 ? 'A' : (finalDiff < 0 ? 'B' : null)));
+
+  // Detecta remontada: el mayor déficit alcanzado durante el partido vs. quién ganó al final.
+  const minVal = Math.min(...seq);
+  const maxVal = Math.max(...seq);
+  let comebackNote = '';
+  if (winnerSide === 'A' && minVal <= -comebackThreshold) {
+    comebackNote = `🔥 ¡Remontada épica! ${nameA} llegó a estar ${Math.abs(minVal)} ${unitLabel} abajo y se llevó el partido.`;
+  } else if (winnerSide === 'B' && maxVal >= comebackThreshold) {
+    comebackNote = `🔥 ¡Remontada épica! ${nameB} llegó a estar ${maxVal} ${unitLabel} abajo y se llevó el partido.`;
+  }
+
+  return `
+    <div style="margin-top:14px;text-align:left;">
+      <div class="tourn-meta" style="margin-bottom:4px;">📈 Momentum del partido — ventaja en ${unitLabel} (${granularityLabel})</div>
+      <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;">
+        <line x1="${padX}" y1="${yMid}" x2="${w - padX}" y2="${yMid}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3,3"/>
+        <polyline points="${linePts}" fill="none" stroke="${lineColor}" stroke-width="2"/>
+        <circle cx="${endPt[0].toFixed(1)}" cy="${endPt[1].toFixed(1)}" r="3.5" fill="${lineColor}"/>
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px;">
+        <span>⬆️ ${esc(nameA)}</span><span>${esc(nameB)} ⬇️</span>
+      </div>
+      ${comebackNote ? `<div class="tourn-meta" style="margin-top:6px;color:var(--ball);font-weight:600;">${esc(comebackNote)}</div>` : ''}
+    </div>`;
+}
 function generateMatchCardHtml(match) {
   const p1 = playerById(match.p1Id || match.player1Id);
   const p2 = playerById(match.p2Id || match.player2Id);
@@ -4130,6 +4228,8 @@ function generateMatchCardHtml(match) {
       <div style="background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;font-size:18px;font-weight:800;color:var(--ball);letter-spacing:2px;margin-bottom:12px;">
         ${esc(match.scoreline)}
       </div>
+
+      ${momentumChartSvg(match)}
 
       <button class="btn btn-ball btn-sm" style="width:100%;margin-top:8px;" onclick="navigator.clipboard.writeText(\`${textSummary}\`); aceAlert('¡Resumen copiado al portapapeles para WhatsApp! 📲');">
         📲 Copiar para WhatsApp
