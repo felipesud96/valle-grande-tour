@@ -244,6 +244,25 @@
 #ace-app .radar-legend { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:10px; }
 #ace-app .radar-legend .stat-pill { font-size: 11px; }
 
+/* ---------- COMPARATIVA H2H (BARRAS ENFRENTADAS ESTILO VIDEOJUEGO) ---------- */
+#ace-app .h2h-compare { margin: 16px 0 18px; }
+#ace-app .h2h-compare-names { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
+#ace-app .h2h-compare-name { font-family:'Bebas Neue'; font-size:17px; letter-spacing:0.03em; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#ace-app .h2h-compare-name.a { color: var(--ball); text-align:left; }
+#ace-app .h2h-compare-name.b { color: #E08A6E; text-align:right; }
+#ace-app .h2h-compare-vs { font-family:'Bebas Neue'; font-size:12px; color:var(--muted); flex-shrink:0; padding:0 6px; }
+#ace-app .h2h-bar-row { margin-bottom: 14px; }
+#ace-app .h2h-bar-row-label { text-align:center; font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:5px; }
+#ace-app .h2h-bar-outer { position:relative; display:flex; height:28px; background:var(--court-2); border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+#ace-app .h2h-bar-half { flex:1; height:100%; position:relative; }
+#ace-app .h2h-bar-fill { position:absolute; top:0; bottom:0; transition: width 0.45s ease; }
+#ace-app .h2h-bar-fill.a { right:0; background: linear-gradient(90deg, rgba(212,175,55,0.18), var(--ball)); border-radius:5px 0 0 5px; }
+#ace-app .h2h-bar-fill.b { left:0; background: linear-gradient(90deg, #E08A6E, rgba(224,138,110,0.18)); border-radius:0 5px 5px 0; }
+#ace-app .h2h-bar-center-line { position:absolute; left:50%; top:0; bottom:0; width:2px; background:var(--ball); transform:translateX(-1px); z-index:3; opacity:0.7; }
+#ace-app .h2h-bar-val { position:absolute; top:50%; transform:translateY(-50%); font-family:'Bebas Neue'; font-size:14px; color:var(--chalk); z-index:2; text-shadow:0 1px 3px rgba(0,0,0,0.7); }
+#ace-app .h2h-bar-val.a { left:8px; }
+#ace-app .h2h-bar-val.b { right:8px; }
+
 /* ---------- CARDS / GRID ---------- */
 #ace-app .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 #ace-app .card {
@@ -349,6 +368,33 @@
 #ace-app .field textarea { resize: vertical; min-height: 60px; }
 #ace-app .field-row { display:flex; gap: 10px; }
 #ace-app .field-row .field { flex:1; }
+
+/* ---------- INGRESO RÁPIDO DE MARCADOR (STEPPER +/-) ---------- */
+#ace-app .score-stepper-wrap { display:flex; flex-direction:column; align-items:center; gap: 6px; }
+#ace-app .score-stepper-tag { font-size: 10.5px; color: var(--muted); text-transform:uppercase; letter-spacing:0.06em; text-align:center; max-width:76px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#ace-app .score-stepper { display:flex; align-items:center; gap: 8px; }
+#ace-app .score-stepper-btn {
+  width: 40px; height: 40px; min-width: 40px; border-radius: 50%;
+  background: var(--court-3); border: 1px solid var(--line); color: var(--chalk);
+  font-family: 'Bebas Neue'; font-size: 22px; line-height: 1;
+  display:flex; align-items:center; justify-content:center;
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background .15s, border-color .15s, transform .08s, color .15s;
+}
+#ace-app .score-stepper-btn:hover { border-color: var(--ball); color: var(--ball); }
+#ace-app .score-stepper-btn:active { transform: scale(0.9); background: var(--clay); border-color: var(--clay); color: var(--chalk); }
+#ace-app .score-stepper-btn.dec { color: var(--muted); }
+#ace-app .score-stepper-value {
+  width: 48px; height: 40px; flex-shrink:0; border-radius: 8px;
+  background: var(--court); border: 1px solid var(--line); color: var(--chalk);
+  font-family: 'Bebas Neue'; font-size: 22px; text-align: center;
+  caret-color: transparent; cursor: default;
+}
+#ace-app .score-stepper-value::-webkit-inner-spin-button,
+#ace-app .score-stepper-value::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#ace-app .score-stepper-value { -moz-appearance: textfield; }
+#ace-app .score-stepper-vs { color: var(--muted); font-family: 'Bebas Neue'; font-size: 20px; padding: 0 2px; }
+
 #ace-app .modal-actions { display:flex; justify-content:flex-end; gap: 8px; margin-top: 18px; }
 #ace-app .photo-picker { display:flex; align-items:center; gap: 12px; }
 #ace-app .check-list { max-height: 160px; overflow-y:auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
@@ -779,6 +825,37 @@ function tierOf(id){ return TIERS.find(t=>t.id===id); }
 function fmtMoney(n){ return '$' + Math.round(n).toLocaleString('es-CL'); }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// ---------- INGRESO RÁPIDO DE MARCADOR (botones +/- en vez de teclado) ----------
+// Genera un "contador" visual con botones grandes de +/- para anotar games sin escribir.
+// El input mantiene su id y su .value para no romper la lógica de guardado existente
+// (readSet sigue leyendo el mismo id); solo cambia la forma de editarlo.
+function scoreStepperFieldHtml(id, max, tag){
+  return `<div class="score-stepper-wrap">
+    ${tag ? `<span class="score-stepper-tag">${esc(tag)}</span>` : ''}
+    <div class="score-stepper">
+      <button type="button" class="score-stepper-btn dec" onclick="AceApp.adjustScore('${id}', -1, ${max})" aria-label="Restar">−</button>
+      <input type="number" readonly inputmode="none" class="score-stepper-value" id="${id}" value="" placeholder="0">
+      <button type="button" class="score-stepper-btn inc" onclick="AceApp.adjustScore('${id}', 1, ${max})" aria-label="Sumar">+</button>
+    </div>
+  </div>`;
+}
+// Genera la fila completa "Lado A  –  Lado B" para un set, lista para insertar en un .field.
+function scoreStepperRowHtml(idA, idB, max, tagA, tagB){
+  return `<div style="display:flex;align-items:center;justify-content:center;gap:14px;">
+    ${scoreStepperFieldHtml(idA, max, tagA)}
+    <span class="score-stepper-vs">–</span>
+    ${scoreStepperFieldHtml(idB, max, tagB)}
+  </div>`;
+}
+function adjustScore(id, delta, max){
+  const input = document.getElementById(id);
+  if(!input) return;
+  const current = input.value === '' ? 0 : Number(input.value);
+  const next = Math.min(Number(max)||0, Math.max(0, current + delta));
+  input.value = next;
+}
+
 function ruleDescription(rules){
   const r = rules || state.matchRules;
   const g = r.gamesPerSet;
@@ -3179,6 +3256,57 @@ function viewHallOfFame(){
   return [efectividad, potencia, control, experiencia, presion];
 }
 
+// Comparativa "cara a cara" con barras horizontales enfrentadas (estilo videojuego de pelea):
+// cada fila mide una métrica (victorias directas, títulos, racha actual) y las barras de
+// cada jugador crecen desde el centro hacia su lado, con el valor mostrado en la punta.
+function h2hStatBarsHtml(playerA, playerB, rec) {
+  if (!playerA || !playerB) return '';
+
+  const titlesMap = titlesByPlayer(state.tournaments, false);
+  const titlesA = titlesMap[playerA.id] || 0;
+  const titlesB = titlesMap[playerB.id] || 0;
+
+  const streakA = currentStreak(playerA.id);
+  const streakB = currentStreak(playerB.id);
+  const streakDisp = (s) => s === 0 ? '0' : `${s > 0 ? '🔥' : '📉'}${Math.abs(s)}`;
+
+  const rows = [
+    { label: 'Victorias (cara a cara)', valA: rec.winsA, valB: rec.winsB, dispA: rec.winsA, dispB: rec.winsB },
+    { label: 'Títulos individuales', valA: titlesA, valB: titlesB, dispA: titlesA, dispB: titlesB },
+    { label: 'Racha actual', valA: Math.abs(streakA), valB: Math.abs(streakB), dispA: streakDisp(streakA), dispB: streakDisp(streakB) },
+  ];
+
+  const barsHtml = rows.map(r => {
+    const max = Math.max(1, r.valA, r.valB);
+    const pctA = Math.round((r.valA / max) * 100);
+    const pctB = Math.round((r.valB / max) * 100);
+    return `
+      <div class="h2h-bar-row">
+        <div class="h2h-bar-row-label">${esc(r.label)}</div>
+        <div class="h2h-bar-outer">
+          <div class="h2h-bar-half">
+            <div class="h2h-bar-fill a" style="width:${pctA}%;"></div>
+            <span class="h2h-bar-val a">${esc(String(r.dispA))}</span>
+          </div>
+          <div class="h2h-bar-center-line"></div>
+          <div class="h2h-bar-half">
+            <div class="h2h-bar-fill b" style="width:${pctB}%;"></div>
+            <span class="h2h-bar-val b">${esc(String(r.dispB))}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="h2h-compare">
+      <div class="h2h-compare-names">
+        <span class="h2h-compare-name a">${esc(playerA.name)}</span>
+        <span class="h2h-compare-vs">VS</span>
+        <span class="h2h-compare-name b">${esc(playerB.name)}</span>
+      </div>
+      ${barsHtml}
+    </div>`;
+}
 function generateRadarSvg(playerA, playerB) {
   if (!playerA) return '';
   const statsA = getPlayerAttributes(playerA.id);
@@ -3571,7 +3699,7 @@ function openMatchModal(tid, isDoubles){
   const rules = matchRulesOf(t);
   const isBestOf3 = rules.format==='bestOf3';
   const maxG = rules.gamesPerSet;
-  const setRow = (n)=>`<div class="field-row"><div class="field"><label>${isBestOf3?`Set ${n} (games)`:'Marcador (games)'}</label><div style="display:flex;gap:6px;align-items:center;"><input type="number" min="0" max="${maxG}" id="m-s${n}a" placeholder="A"><span style="color:var(--muted);">–</span><input type="number" min="0" max="${maxG}" id="m-s${n}b" placeholder="B"></div></div></div>`;
+  const setRow = (n)=>`<div class="field-row"><div class="field"><label>${isBestOf3?`Set ${n} (games)`:'Marcador (games)'}</label>${scoreStepperRowHtml('m-s'+n+'a','m-s'+n+'b', maxG)}</div></div>`;
   const addForm = state.isAdmin ? `
     <div class="field-row">
       <div class="field"><label>Lado A</label><select id="m-sideA">${opts}</select></div>
@@ -3659,11 +3787,7 @@ function openCasualMatchModal() {
     <div class="field-row" id="cm-setrow-${n}" style="${n>1 && !isBestOf3 ? 'display:none;' : ''}">
       <div class="field">
         <label>${isBestOf3?`Set ${n} (games)`:'Marcador (games)'}</label>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input type="number" min="0" max="9" id="cm-s${n}a" placeholder="A" style="text-align:center;">
-          <span style="color:var(--muted);">–</span>
-          <input type="number" min="0" max="9" id="cm-s${n}b" placeholder="B" style="text-align:center;">
-        </div>
+        ${scoreStepperRowHtml('cm-s'+n+'a','cm-s'+n+'b', 9)}
       </div>
     </div>`;
 
@@ -3909,18 +4033,18 @@ function showH2H(){
   const pB = playerById(idB);
   const radarHtml = generateRadarSvg(pA, pB);
   const rec = headToHeadRecord(idA, idB);
+  const barsHtml = h2hStatBarsHtml(pA, pB, rec);
 
   if (rec.matches.length === 0) {
-    el.innerHTML = radarHtml + `<div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
+    el.innerHTML = radarHtml + barsHtml + `<div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
     return;
   }
 
   const rows = rec.matches.map(m => `<div class="podium-row"><span>${esc(m.tournamentName)} ${m.date ? '· ' + m.date : ''}</span><span>${esc(m.scoreline)}${m.winnerId ? ` · gana ${esc(playerName(m.winnerId))}` : ''}</span></div>`).join('');
-  
+
   el.innerHTML = `
     ${radarHtml}
-    <div class="disp" style="font-size:26px;text-align:center;margin-bottom:4px;color:var(--ball);">${rec.winsA} - ${rec.winsB}</div>
-    <div class="tourn-meta" style="text-align:center;margin-bottom:12px;">${esc(playerName(idA))} vs ${esc(playerName(idB))}</div>
+    ${barsHtml}
     <div class="podium">${rows}</div>`;
 }
 function generateMatchCardHtml(match) {
@@ -4709,6 +4833,55 @@ async function deleteExpense(id){
 }
 
 function setTab(tab){ state.tab = tab; render();checkChallengeNotifications();}
+
+// ---------- DESLIZAMIENTO (SWIPE) ENTRE PESTAÑAS EN MÓVILES ----------
+function initTabSwipe(){
+  const el = document.getElementById('section-content');
+  if (!el || el.dataset.swipeInit) return; // evita registrar el listener más de una vez
+  el.dataset.swipeInit = '1';
+
+  const MIN_DIST = 55;   // distancia mínima en px para considerarlo un swipe
+  const MAX_TIME = 600;  // tiempo máximo en ms para que cuente como swipe (no arrastre lento)
+  const MAX_OFFAXIS_RATIO = 0.6; // cuánto se permite de movimiento vertical respecto al horizontal
+
+  let startX = 0, startY = 0, startTime = 0, tracking = false;
+
+  el.addEventListener('touchstart', (e) => {
+    // Si el gesto empieza dentro de una zona con su propio scroll horizontal
+    // (ej: el árbol de un torneo), no interferimos con ese scroll.
+    if (e.target.closest('.bracket-container, .tabs')) { tracking = false; return; }
+    if (e.touches.length !== 1) { tracking = false; return; }
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    startTime = Date.now();
+    tracking = true;
+  }, { passive: true });
+
+  el.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const elapsed = Date.now() - startTime;
+
+    if (elapsed > MAX_TIME) return;
+    if (Math.abs(dx) < MIN_DIST) return;
+    if (Math.abs(dy) > Math.abs(dx) * MAX_OFFAXIS_RATIO) return; // gesto demasiado vertical -> era scroll
+
+    const idx = TABS.findIndex(x => x.id === state.tab);
+    if (idx === -1) return;
+
+    // Deslizar hacia la derecha (dx > 0) va a la pestaña anterior;
+    // deslizar hacia la izquierda (dx < 0) va a la siguiente.
+    const newIdx = dx > 0 ? idx - 1 : idx + 1;
+    if (newIdx >= 0 && newIdx < TABS.length) {
+      setTab(TABS[newIdx].id);
+    }
+  }, { passive: true });
+}
 function setAchSubTab(tab){ state.achSubTab = tab; state.achCategory = 'all'; state.achSearch = ''; render(); }
 function setAchCategory(cat){ state.achCategory = cat; render(); }
 function setAchSearch(val){ state.achSearch = val; render(); }
@@ -4845,6 +5018,7 @@ function rankingSkeletonHtml(){
 }
 function bootApp(){
   document.getElementById('section-content').innerHTML = rankingSkeletonHtml();
+  initTabSwipe();
   seedIfEmpty().then(() => loadAll()).then(render).then(() => subscribeLiveMatches()).catch(err => {
     console.error('Error al iniciar el circuito:', err);
     document.getElementById('section-content').innerHTML =
@@ -4877,11 +5051,7 @@ function openBracketMatchModal(tid, isDoubles, rIdx, mIdx){
     <div class="field-row">
       <div class="field">
         <label style="color:var(--muted);">${isBestOf3 ? `Set ${n}` : 'Marcador'} (Games)</label>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input type="number" min="0" max="${maxG}" id="bm-s${n}a" placeholder="${esc(p1Name)}" style="width:100%; text-align:center;">
-          <span style="color:var(--muted);">–</span>
-          <input type="number" min="0" max="${maxG}" id="bm-s${n}b" placeholder="${esc(p2Name)}" style="width:100%; text-align:center;">
-        </div>
+        ${scoreStepperRowHtml('bm-s'+n+'a','bm-s'+n+'b', maxG, p1Name, p2Name)}
       </div>
     </div>`;
 // --- INICIO CONEXIÓN UMPIRE ---
@@ -5522,6 +5692,7 @@ window.AceApp.closeSeason = closeSeason;
 window.AceApp.openMatchCardModal = openMatchCardModal;
 window.AceApp.setRankingSubTab = setRankingSubTab;
 window.AceApp.confirmChallenge = confirmChallenge;
+window.AceApp.adjustScore = adjustScore;
   bootApp();
 })();
 </script>
