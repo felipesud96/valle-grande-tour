@@ -1281,7 +1281,7 @@ async function generatePlayerCardImage(playerId){
   const p = playerById(playerId);
   if(!p) return;
   const pts = singlesPointsByPlayer()[playerId] || 0;
-  const pos = singlesRankingList().findIndex(r=>r.id===playerId) + 1;
+  const pos = (singlesRankingList().find(r=>r.id===playerId)||{}).rank || 0;
   const results = singlesMatchResultsForPlayer(playerId);
   const wins = results.filter(r=>r.won).length;
   const losses = results.length - wins;
@@ -2328,7 +2328,7 @@ function autoBadges(playerId){
   const finals = (finalsByPlayer(state.tournaments)[playerId])||0;
   const played = state.tournaments.filter(t=>t.status==='completed' && (t.participants||[]).includes(playerId)).length;
   const ranking = singlesRankingList();
-  const pos = ranking.findIndex(r=>r.id===playerId) + 1;
+  const pos = (ranking.find(r=>r.id===playerId)||{}).rank || 0;
   const badges = [];
   if(singlesTitles>=1) badges.push({e:'🏆', t:'Campeón'});
   if(singlesTitles>=3) badges.push({e:'👑', t:'Multicampeón'});
@@ -2410,16 +2410,30 @@ function hasFiloDeNavajaDoubles(playerId){
   });
 }
 
+// Agrega el campo "rank" a una lista ya ordenada de mayor a menor puntaje, con empates
+// compartiendo la misma posición (ranking estándar tipo 1,2,2,4 — se salta el 3).
+function withTiedRanks(sortedList){
+  let lastPoints = null, lastRank = 0;
+  return sortedList.map((item, i) => {
+    if(item.points !== lastPoints){
+      lastRank = i + 1;
+      lastPoints = item.points;
+    }
+    return { ...item, rank: lastRank };
+  });
+}
 function singlesRankingList(){
   const pts = singlesPointsByPlayer();
-  return state.players.map(p=>({id:p.id, name:p.name, points: pts[p.id]||0}))
+  const sorted = state.players.map(p=>({id:p.id, name:p.name, points: pts[p.id]||0}))
     .sort((a,b)=>b.points-a.points);
+  return withTiedRanks(sorted);
 }
 
 function doublesRankingList(){
   const pts = doublesPointsByPlayer();
-  return state.players.map(p=>({id:p.id, name:p.name, points: pts[p.id]||0}))
+  const sorted = state.players.map(p=>({id:p.id, name:p.name, points: pts[p.id]||0}))
     .sort((a,b)=>b.points-a.points);
+  return withTiedRanks(sorted);
 }
 
 // ---------- RENDER SHELL ----------
@@ -2604,7 +2618,7 @@ function nextMatchWidgetHtml(playerId){
 
   const pts = singlesPointsByPlayer()[state.myPlayerId] || 0;
   const rankList = singlesRankingList();
-  const pos = rankList.findIndex(r => r.id === state.myPlayerId) + 1;
+  const pos = (rankList.find(r => r.id === state.myPlayerId)||{}).rank || 0;
   const results = singlesMatchResultsForPlayer(state.myPlayerId);
   const wins = results.filter(r => r.won).length;
   const losses = results.length - wins;
@@ -2788,14 +2802,14 @@ function viewRanking(){
 
   const rows = list.map((r, i) => {
     const p = playerById(r.id);
-    const topClass = i === 0 ? 'top1' : (i === 1 ? 'top2' : (i === 2 ? 'top3' : ''));
+    const topClass = r.rank === 1 ? 'top1' : (r.rank === 2 ? 'top2' : (r.rank === 3 ? 'top3' : ''));
     const trend = recentPointsTrend(r.id, false);
     const streak = currentStreak(r.id);
     const expiring = pointsExpiringSoon(r.id, false);
 
     return `
       <div class="rank-row ${topClass}">
-        <div class="rank-pos">${i + 1}</div>
+        <div class="rank-pos">${r.rank}</div>
         <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
           ${playerAvatarWithFireHtml(p, 46, streak)}
           <div class="rank-name-block">
@@ -2935,7 +2949,7 @@ function playersGridHtml(){
   }
   const ranking = singlesRankingList();
   const cards = filtered.map(p=>{
-    const pos = ranking.findIndex(r=>r.id===p.id)+1;
+    const pos = (ranking.find(r=>r.id===p.id)||{}).rank || 0;
     const titles = (titlesByPlayer(state.tournaments,false)[p.id]||0);
     const badges = autoBadges(p.id).map(b=>`<span class="badge-emoji" title="${b.t}">${b.e}</span>`).join('');
     const manualAch = state.achievements.filter(a=>a.playerId===p.id);
@@ -3081,8 +3095,8 @@ function viewDoubles(){
   const rankHtml = rankList.length ? rankList.map((r,i)=>{
     const p = playerById(r.id);
     return `
-    <div class="rank-row ${i===0?'top1':''}">
-      <div class="rank-pos">${i+1}</div>
+    <div class="rank-row ${r.rank===1?'top1':''}">
+      <div class="rank-pos">${r.rank}</div>
       ${playerAvatarHtml(p,46)}
       <div class="rank-name-block">
         <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(recentPointsTrend(r.id, true))}</span>
@@ -5354,7 +5368,7 @@ function openPlayerProfileModal(playerId){
   if(!p) return;
   const pts = singlesPointsByPlayer()[playerId] || 0;
   const rankList = singlesRankingList();
-  const pos = rankList.findIndex(r=>r.id===playerId) + 1;
+  const pos = (rankList.find(r=>r.id===playerId)||{}).rank || 0;
   const results = singlesMatchResultsForPlayer(playerId);
   const wins = results.filter(r=>r.won).length;
   const losses = results.length - wins;
@@ -5688,6 +5702,39 @@ async function saveTournament(btn, id){
   });
   aceAlert('✅ Torneo guardado');
 }
+// Orden de siembra estándar de un cuadro de eliminación directa (el mismo que usan
+// los torneos de tenis reales): siembra 1 y 2 quedan en extremos opuestos, y los
+// "byes" (si no hay jugadores suficientes para llenar el cuadro) recaen sobre los
+// mejores puestos del ranking, repartidos por todo el cuadro en vez de amontonados.
+function seedOrder(n){
+  if(n===1) return [1];
+  const prev = seedOrder(n/2);
+  const result = [];
+  prev.forEach(s=>{ result.push(s); result.push(n+1-s); });
+  return result;
+}
+// Ordena los inscritos de mejor a peor puesto según el ranking vigente. Los empates
+// (mismo puntaje, misma posición) se desempatan al azar entre ellos, ya que no hay
+// forma justa de preferir a uno sobre otro solo por puntaje igual.
+function seedItemsByRanking(items, isDoubles){
+  const rankList = isDoubles ? doublesRankingList() : singlesRankingList();
+  const pointsOf = (item) => {
+    if(!isDoubles) return (rankList.find(r=>r.id===item) || {}).points || 0;
+    // en dobles, item es el índice de la pareja: usamos el mejor puntaje individual de la pareja
+    return 0; // se resuelve abajo con el mapa de parejas
+  };
+  const withPoints = items.map(item => ({ item, points: pointsOf(item) }));
+  // Agrupa por puntaje, mezcla al azar dentro de cada grupo empatado, y concatena de mayor a menor.
+  const groups = {};
+  withPoints.forEach(({item,points}) => {
+    if(!groups[points]) groups[points] = [];
+    groups[points].push(item);
+  });
+  const sortedPoints = Object.keys(groups).map(Number).sort((a,b)=>b-a);
+  const seeded = [];
+  sortedPoints.forEach(pts => { seeded.push(...shuffleArray(groups[pts])); });
+  return seeded;
+}
 async function drawBracket(tid, isDoubles){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede sortear el cuadro.'); return; }
   const list = isDoubles ? state.doubles : state.tournaments;
@@ -5698,28 +5745,49 @@ async function drawBracket(tid, isDoubles){
   if(items.length < 2){ aceAlert('Necesitas al menos 2 inscritos para sortear.'); return; }
   if(t.bracket && t.bracket.length > 0 && !(await confirmDialog('Ya hay un cuadro sorteado. ¿Sortear de nuevo? (Se perderán los avances)'))) return;
 
-  const shuffled = shuffleArray(items);
-  const numPlayers = shuffled.length;
-  // Calcula el tamaño del cuadro (2, 4, 8, 16...)
-  const bracketSize = Math.pow(2, Math.ceil(Math.log2(numPlayers))); 
-  const numMatchesR1 = bracketSize / 2;
-
-  // 1. Crear Ronda 0 (Primera ronda)
-  let round0 = [];
-  for(let i=0; i<numMatchesR1; i++) {
-    round0.push({ p1: null, p2: null, winner: null, scoreLine: '' });
+  // Siembra por ranking: en dobles usamos el mejor puntaje de cualquiera de los dos
+  // integrantes de la pareja como referencia para ordenar.
+  let seeded;
+  if(isDoubles){
+    const rankList = singlesRankingList();
+    const ptsOfPlayer = (pid) => (rankList.find(r=>r.id===pid)||{}).points || 0;
+    const pairPoints = items.map(idx => Math.max(...(t.pairs[Number(idx)]||[]).map(ptsOfPlayer), 0));
+    const groups = {};
+    items.forEach((item,i)=>{ const pts = pairPoints[i]; if(!groups[pts]) groups[pts]=[]; groups[pts].push(item); });
+    const sortedPoints = Object.keys(groups).map(Number).sort((a,b)=>b-a);
+    seeded = [];
+    sortedPoints.forEach(pts => { seeded.push(...shuffleArray(groups[pts])); });
+  } else {
+    seeded = seedItemsByRanking(items, false);
   }
 
-  // Repartir jugadores intercalados. Los que no tengan rival recibirán un BYE.
-  for(let i=0; i<numPlayers; i++) {
-    let matchIdx = i % numMatchesR1;
-    if(!round0[matchIdx].p1) round0[matchIdx].p1 = shuffled[i];
-    else round0[matchIdx].p2 = shuffled[i];
+  const numPlayers = seeded.length;
+  // Calcula el tamaño del cuadro (2, 4, 8, 16...)
+  const bracketSize = Math.pow(2, Math.ceil(Math.log2(numPlayers)));
+  const numMatchesR1 = bracketSize / 2;
+
+  // Posiciones de siembra estándar: la semilla 1 en la posición 1, semilla 2 en la
+  // última, etc. Los "slots" que sobran (sin jugador real) quedan como BYE — y por
+  // cómo funciona este orden, siempre le tocan a las semillas mejor puestas primero,
+  // repartidas por todo el cuadro (no amontonadas).
+  const order = seedOrder(bracketSize); // ej para 8: [1,8,4,5,2,7,3,6]
+  const slots = new Array(bracketSize).fill(null);
+  order.forEach((seedNum, slotIdx) => {
+    if(seedNum <= numPlayers) slots[slotIdx] = seeded[seedNum - 1];
+  });
+
+  // 1. Crear Ronda 0 (Primera ronda) a partir de los slots ya sembrados
+  let round0 = [];
+  for(let i=0; i<numMatchesR1; i++){
+    const p1 = slots[i*2];
+    const p2 = slots[i*2+1];
+    round0.push({ p1, p2, winner: null, scoreLine: '' });
   }
 
   // Auto-avanzar a los que tienen "Pase Directo" (BYE)
   round0.forEach(m => {
-    if(!m.p2) m.winner = m.p1;
+    if(m.p1 && !m.p2) m.winner = m.p1;
+    else if(!m.p1 && m.p2) m.winner = m.p2;
   });
 
   // 2. Crear las siguientes rondas (Semis, Final, etc) vacías
