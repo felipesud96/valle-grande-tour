@@ -5032,8 +5032,9 @@ function __resolveConfirm(value){
   if(resolve) resolve(value);
 }
 function closeModal(){
-  const o = document.getElementById('ace-overlay');
-  if(o) o.remove();
+  // Se borran TODOS los overlays presentes (no solo el primero que encuentre por ID),
+  // por si quedaron apilados dos modales abiertos en cadena sin cerrar el anterior.
+  document.querySelectorAll('.overlay').forEach(o => o.remove());
   tempPhoto = null;
 }
 
@@ -5881,7 +5882,7 @@ function openIdentityModal(){
     <div class="check-list" style="max-height:220px;">${list}</div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-ghost btn-sm" onclick="AceApp.closeModal()">Cerrar</button>
-      <button class="btn btn-primary" onclick="AceApp.openPlayerModal(null, true)">+ Soy nuevo, registrarme</button>
+      <button class="btn btn-primary" onclick="AceApp.closeModal();AceApp.openPlayerModal(null, true)">+ Soy nuevo, registrarme</button>
     </div>`;
   openModal(html);
 }
