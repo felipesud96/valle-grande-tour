@@ -1396,6 +1396,124 @@ async function generateRankingCardImage(){
   showCardPreviewModal(canvas, 'ranking-valle-grande-tour.png', 'Ranking del circuito');
 }
 
+function truncateCanvasText(ctx, text, maxWidth){
+  if(ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while(t.length>1 && ctx.measureText(t+'…').width > maxWidth){ t = t.slice(0,-1); }
+  return t+'…';
+}
+// Genera la imagen del cuadro completo (main draw) tal cual se ve en la app,
+// con rondas en columnas y líneas conectando cada partido con el siguiente.
+async function generateBracketCardImage(tid, isDoubles){
+  await ensureFontsReady();
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  if(!t || !t.bracket || !t.bracket.length){ aceAlert('Este torneo todavía no tiene cuadro sorteado.'); return; }
+  const tier = tierOf(t.tier);
+
+  // Misma regla que en la app: BYE solo es real en la ronda 0; después es "Por definir".
+  const labelOf = (id, rIdx) => {
+    if(id) return isDoubles ? (t.pairs[Number(id)]||[]).map(playerName).join(' / ') : playerName(id);
+    return rIdx===0 ? 'BYE' : 'Por definir';
+  };
+  const roundName = (rIdx, totalRounds) => {
+    const rev = totalRounds - 1 - rIdx;
+    if(rev===0) return 'FINAL';
+    if(rev===1) return 'SEMIFINAL';
+    if(rev===2) return 'CUARTOS DE FINAL';
+    if(rev===3) return 'OCTAVOS DE FINAL';
+    return `RONDA ${rIdx+1}`;
+  };
+
+  const numRounds = t.bracket.length;
+  const numR1 = t.bracket[0].length;
+  const boxW = 260, boxH = 64, rowGap = 24, colGap = 64;
+  const topPad = 150, leftPad = 40, bottomPad = 70;
+
+  const yPos = t.bracket.map(round => new Array(round.length).fill(0));
+  for(let i=0;i<numR1;i++){ yPos[0][i] = topPad + i*(boxH+rowGap) + boxH/2; }
+  for(let r=1;r<numRounds;r++){
+    for(let i=0;i<t.bracket[r].length;i++){
+      yPos[r][i] = (yPos[r-1][i*2] + yPos[r-1][i*2+1]) / 2;
+    }
+  }
+
+  const totalHeight = topPad + numR1*(boxH+rowGap) + bottomPad;
+  const totalWidth = leftPad*2 + numRounds*boxW + (numRounds-1)*colGap;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = totalWidth; canvas.height = totalHeight;
+  const ctx = canvas.getContext('2d');
+  cardBackground(ctx, totalWidth, totalHeight);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#F4F0E2';
+  ctx.font = 'bold 40px "Bebas Neue", sans-serif';
+  ctx.fillText(t.name.toUpperCase(), totalWidth/2, 55);
+  ctx.font = '18px sans-serif';
+  ctx.fillStyle = '#D4AF37';
+  ctx.fillText(`${tier?tier.label:''}${t.date?' · '+t.date:''}`, totalWidth/2, 85);
+
+  // Líneas conectoras primero, para que las cajas queden encima
+  ctx.strokeStyle = 'rgba(244,240,226,0.25)';
+  ctx.lineWidth = 2;
+  for(let r=1;r<numRounds;r++){
+    const x = leftPad + r*(boxW+colGap);
+    const feedX = leftPad + (r-1)*(boxW+colGap) + boxW;
+    const midX = feedX + colGap/2;
+    t.bracket[r].forEach((m,i)=>{
+      const y1 = yPos[r-1][i*2], y2 = yPos[r-1][i*2+1];
+      const targetY = yPos[r][i];
+      ctx.beginPath();
+      ctx.moveTo(feedX, y1); ctx.lineTo(midX, y1);
+      ctx.moveTo(feedX, y2); ctx.lineTo(midX, y2);
+      ctx.moveTo(midX, y1); ctx.lineTo(midX, y2);
+      ctx.moveTo(midX, targetY); ctx.lineTo(x, targetY);
+      ctx.stroke();
+    });
+  }
+
+  // Cajas de partidos
+  for(let r=0;r<numRounds;r++){
+    const x = leftPad + r*(boxW+colGap);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#ACA89D';
+    ctx.fillText(roundName(r, numRounds), x+boxW/2, topPad-30);
+
+    t.bracket[r].forEach((m,i)=>{
+      const yc = yPos[r][i];
+      const y = yc - boxH/2;
+      ctx.fillStyle = '#161615';
+      cardRoundedRect(ctx, x, y, boxW, boxH, 8);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(244,240,226,0.15)';
+      ctx.lineWidth = 1;
+      cardRoundedRect(ctx, x, y, boxW, boxH, 8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y+boxH/2); ctx.lineTo(x+boxW, y+boxH/2);
+      ctx.strokeStyle = 'rgba(244,240,226,0.1)';
+      ctx.stroke();
+
+      const p1 = labelOf(m.p1, r), p2 = labelOf(m.p2, r);
+      const isW1 = m.winner && m.winner===m.p1;
+      const isW2 = m.winner && m.winner===m.p2;
+
+      ctx.textAlign = 'left';
+      ctx.font = (isW1?'bold ':'') + '16px sans-serif';
+      ctx.fillStyle = isW1 ? '#D4AF37' : (m.p1?'#F4F0E2':'#6b675e');
+      ctx.fillText(truncateCanvasText(ctx, p1, boxW-20), x+12, y+boxH/2-8);
+
+      ctx.font = (isW2?'bold ':'') + '16px sans-serif';
+      ctx.fillStyle = isW2 ? '#D4AF37' : (m.p2?'#F4F0E2':'#6b675e');
+      ctx.fillText(truncateCanvasText(ctx, p2, boxW-20), x+12, y+boxH-10);
+    });
+  }
+
+  cardWatermark(ctx, totalWidth, totalHeight);
+  showCardPreviewModal(canvas, `${t.name.replace(/\s+/g,'-')}-cuadro.png`, 'Cuadro del torneo');
+}
 async function generateVersusCardImage(idA, idB){
   await ensureFontsReady();
   const pA = playerById(idA), pB = playerById(idB);
@@ -1625,6 +1743,8 @@ function isPointsExpired(dateStr){
 // según sea Copa 250, Abierto 500, Masters 1000 o Grand Slam del Circuito.
 // Los partidos libres siempre valen 1x (sin multiplicador).
 let TIER_POINT_MULTIPLIER = { '250': 1, '500': 1.5, 'masters': 2, 'slam': 2.5 };
+// Los partidos libres valen mucho menos que un torneo oficial (aunque sea el más chico).
+const CASUAL_MATCH_MULTIPLIER = 0.2;
 function tierPointMultiplier(tierId){
   return TIER_POINT_MULTIPLIER[tierId] != null ? TIER_POINT_MULTIPLIER[tierId] : 1;
 }
@@ -1644,13 +1764,13 @@ function singlesPointEvents() {
       });
     }
   });
-  // 2. Games de Partidos Libres en modalidad SINGLES (siempre 1x)
+  // 2. Games de Partidos Libres en modalidad SINGLES (valen mucho menos que un torneo oficial)
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'singles' || !m.mode) {
       let gA = 0, gB = 0;
       (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
-      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: gA, date: m.date, label: 'Partido libre' }));
-      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: gB, date: m.date, label: 'Partido libre' }));
+      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gA*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
+      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gB*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
     }
   });
   return events;
@@ -1682,13 +1802,13 @@ function doublesPointEvents() {
       });
     }
   });
-  // 2. Games de Partidos Libres en modalidad DOBLES (siempre 1x)
+  // 2. Games de Partidos Libres en modalidad DOBLES (valen mucho menos que un torneo oficial)
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'doubles') {
       let gA = 0, gB = 0;
       (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
-      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: gA, date: m.date, label: 'Partido libre' }));
-      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: gB, date: m.date, label: 'Partido libre' }));
+      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gA*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
+      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gB*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
     }
   });
   return events;
@@ -1997,30 +2117,18 @@ function shareTournament(tid, isDoubles){
   const list = isDoubles ? state.doubles : state.tournaments;
   const t = list.find(x=>x.id===tid);
   if(!t) return;
+
+  // Si ya hay cuadro sorteado, compartimos la imagen del main draw (mucho más clara
+  // que una lista de texto). Solo si todavía no hay sorteo, avisamos por texto.
+  if(t.bracket && t.bracket.length){
+    generateBracketCardImage(tid, isDoubles);
+    return;
+  }
+
   const tier = tierOf(t.tier);
   let text = `🎾 ${t.name} (${tier ? tier.short : ''})\n${t.date || ''}\n\n`;
-
-  if(t.status === 'completed'){
-    const champLabel = isDoubles
-      ? (t.results.champion||[]).map(idx => (t.pairs[idx]||[]).map(playerName).join(' / ')).join(', ')
-      : (t.results.champion||[]).map(playerName).join(', ');
-    const finalLabel = isDoubles
-      ? (t.results.finalist||[]).map(idx => (t.pairs[idx]||[]).map(playerName).join(' / ')).join(', ')
-      : (t.results.finalist||[]).map(playerName).join(', ');
-    text += `🏆 Campeón: ${champLabel || '—'}\n`;
-    if(finalLabel) text += `🥈 Finalista: ${finalLabel}\n`;
-  } else if(t.bracket && t.bracket.length){
-    t.bracket.forEach(round=>{
-      round.forEach(m=>{
-        const n1 = isDoubles ? (m.p1!=null ? (t.pairs[Number(m.p1)]||[]).map(playerName).join(' / ') : 'BYE') : (m.p1 ? playerName(m.p1) : 'BYE');
-        const n2 = isDoubles ? (m.p2!=null ? (t.pairs[Number(m.p2)]||[]).map(playerName).join(' / ') : 'BYE') : (m.p2 ? playerName(m.p2) : 'BYE');
-        text += `${n1} vs ${n2}${m.scoreLine ? ' · ' + m.scoreLine : ''}\n`;
-      });
-    });
-  } else {
-    const names = isDoubles ? (t.pairs||[]).map(pair=>pair.map(playerName).join(' / ')) : (t.participants||[]).map(playerName);
-    text += 'Inscritos: ' + (names.join(', ') || '—') + '\n';
-  }
+  const names = isDoubles ? (t.pairs||[]).map(pair=>pair.map(playerName).join(' / ')) : (t.participants||[]).map(playerName);
+  text += 'Inscritos: ' + (names.join(', ') || '—') + '\n';
 
   if(navigator.share){
     navigator.share({ title: t.name, text }).catch(()=>{});
@@ -2031,9 +2139,13 @@ function shareTournament(tid, isDoubles){
 function drawHtml(t, isDoubles){
   if(!t.bracket || t.bracket.length===0) return '';
   
-  const labelOf = isDoubles 
-    ? (id) => id ? (t.pairs[Number(id)]||[]).map(playerName).join(' / ') : 'BYE (Pasa directo)'
-    : (id) => id ? playerName(id) : 'BYE (Pasa directo)';
+  // "BYE" solo es real en la primera ronda (ronda 0), que es donde el sorteo asigna
+  // pases directos. En rondas siguientes, un casillero vacío significa que todavía
+  // no se sabe quién avanza — eso debe verse "Por definir", no "BYE".
+  const labelOf = (id, rIdx) => {
+    if(id) return isDoubles ? (t.pairs[Number(id)]||[]).map(playerName).join(' / ') : playerName(id);
+    return rIdx === 0 ? 'BYE (Pasa directo)' : 'Por definir';
+  };
     
   const getRoundName = (rIdx, totalRounds) => {
       const rev = totalRounds - 1 - rIdx;
@@ -2051,8 +2163,8 @@ function drawHtml(t, isDoubles){
      html += `<div class="bracket-round-title">${getRoundName(rIdx, t.bracket.length)}</div>`;
      
      round.forEach((m, mIdx) => {
-         const p1Name = labelOf(m.p1);
-         const p2Name = labelOf(m.p2);
+         const p1Name = labelOf(m.p1, rIdx);
+         const p2Name = labelOf(m.p2, rIdx);
          const isWinner1 = m.winner === m.p1 && m.p1 !== null;
          const isWinner2 = m.winner === m.p2 && m.p2 !== null;
          const isPlayable = m.p1 !== null && m.p2 !== null;
@@ -2855,7 +2967,7 @@ function viewTournaments(){
   const subTab = state.tournamentsSubTab || 'singles';
   const isDoublesSub = subTab === 'doubles';
   const head = `<div class="section-head"><h2>Torneos</h2>${state.isAdmin?`<button class="btn btn-primary" onclick="${isDoublesSub?'AceApp.openDoublesModal()':'AceApp.openTournamentModal()'}">+ Nuevo torneo ${isDoublesSub?'de dobles':'individual'}</button>`:''}</div>
-  <div class="section-sub">Los puntos de ranking salen de los games que ganas, multiplicados según la categoría del torneo (250 ×1 · 500 ×1.5 · Masters 1000 ×2 · Grand Slam ×2.5). Los partidos libres valen ×1. ${ruleDescription()}</div>
+  <div class="section-sub">Los puntos de ranking salen de los games que ganas, multiplicados según la categoría del torneo (250 ×1 · 500 ×1.5 · Masters 1000 ×2 · Grand Slam ×2.5). Los partidos libres valen mucho menos (×${CASUAL_MATCH_MULTIPLIER}). ${ruleDescription()}</div>
   <div style="display:flex;gap:8px;margin-bottom:16px;">
     <button class="btn ${!isDoublesSub?'btn-primary':'btn-ghost'} btn-sm" onclick="AceApp.setTournamentsSubTab('singles')">🎾 Individual</button>
     <button class="btn ${isDoublesSub?'btn-primary':'btn-ghost'} btn-sm" onclick="AceApp.setTournamentsSubTab('doubles')">👥 Dobles</button>
@@ -7175,6 +7287,7 @@ window.AceApp.savePrediction = savePrediction;
 window.AceApp.generatePlayerCardImage = generatePlayerCardImage;
 window.AceApp.generateRankingCardImage = generateRankingCardImage;
 window.AceApp.generateVersusCardImage = generateVersusCardImage;
+window.AceApp.generateBracketCardImage = generateBracketCardImage;
 window.AceApp.adjustScore = adjustScore;
   bootApp();
 })();
