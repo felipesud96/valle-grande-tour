@@ -6060,10 +6060,17 @@ async function deleteDoubles(id){
 function openPairsModal(tid){
   const t = state.doubles.find(x=>x.id===tid);
   if(state.players.length<2){ aceAlert('Necesitas al menos 2 jugadores creados.'); return; }
+  const currentIds = new Set((t.pairs||[]).flat());
+  const checklistHtml = state.players.map(p=>`
+    <label class="check-item"><input type="checkbox" class="pair-participant" value="${p.id}" ${currentIds.has(p.id)?'checked':''}> ${esc(p.name)}</label>
+  `).join('');
   const pairsRows = (t.pairs.length?t.pairs:[['','']]).map((pair,idx)=>pairRowHtml(pair,idx)).join('');
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Parejas</h2>
+    <div class="section-sub">Marca quiénes participan y sortéalas al azar (más entretenido), o arma las parejas tú mismo más abajo.</div>
+    <div class="check-list" id="pair-participants-list" style="margin-bottom:10px;">${checklistHtml}</div>
+    <button type="button" class="btn btn-ball btn-sm" style="margin-bottom:16px;" onclick="AceApp.randomizePairs()">🎲 Sortear parejas al azar</button>
     <div id="pairs-list">${pairsRows}</div>
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="AceApp.addPairRow()">+ Agregar pareja</button>
     <div class="modal-actions">
@@ -6071,6 +6078,25 @@ function openPairsModal(tid){
       <button class="btn btn-primary" onclick="AceApp.savePairs('${tid}')">Guardar</button>
     </div>`;
   openModal(html);
+}
+// Toma a los jugadores marcados como participantes y arma parejas al azar entre ellos.
+// Si sobra uno (número impar), queda afuera y se avisa para que el admin lo resuelva a mano.
+function randomizePairs(){
+  const checked = Array.from(document.querySelectorAll('#pair-participants-list .pair-participant:checked')).map(el=>el.value);
+  if(checked.length<2){ aceAlert('Marca al menos 2 jugadores para sortear parejas.'); return; }
+  const shuffled = shuffleArray(checked);
+  const pairs = [];
+  for(let i=0; i+1<shuffled.length; i+=2){
+    pairs.push([shuffled[i], shuffled[i+1]]);
+  }
+  const leftover = shuffled.length % 2 === 1 ? shuffled[shuffled.length-1] : null;
+  const list = document.getElementById('pairs-list');
+  if(list) list.innerHTML = pairs.map((pair,idx)=>pairRowHtml(pair,idx)).join('');
+  if(leftover){
+    aceAlert(`🎲 ¡Parejas sorteadas! ⚠️ ${playerName(leftover)} quedó sin pareja (número impar) — agrégalo a mano a una de las filas.`);
+  } else {
+    aceAlert('🎲 ¡Parejas sorteadas!');
+  }
 }
 function pairRowHtml(pair, idx){
   const opts = (sel)=> state.players.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
@@ -6420,7 +6446,7 @@ window.AceApp = {
   openSettingsModal, saveSettings,
   openTournamentModal, saveTournament, deleteTournament, selectTier,
   openParticipantsModal, saveParticipants, openResultsModal, saveResults,
-  openDoublesModal, saveDoublesTournament, deleteDoubles, openPairsModal, addPairRow, savePairs,
+  openDoublesModal, saveDoublesTournament, deleteDoubles, openPairsModal, addPairRow, savePairs, randomizePairs,
   openDoublesResultsModal, saveDoublesResults,
   openAchievementModal, saveAchievement, deleteAchievement, pickSuggested,
   togglePaid, markAllPaid, openExpenseModal, saveExpense, deleteExpense, bootApp,
