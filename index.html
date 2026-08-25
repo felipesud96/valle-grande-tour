@@ -460,13 +460,14 @@
 #ace-app .field-row .field { flex:1; }
 
 /* ---------- INGRESO RÁPIDO DE MARCADOR (STEPPER +/-) ---------- */
-#ace-app .score-stepper-wrap { display:flex; flex-direction:column; align-items:center; gap: 6px; }
+#ace-app .score-stepper-wrap { display:flex; flex-direction:column; align-items:center; gap: 6px; min-width:0; }
 #ace-app .score-stepper-tag { font-size: 10.5px; color: var(--muted); text-transform:uppercase; letter-spacing:0.06em; text-align:center; max-width:76px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#ace-app .score-stepper { display:flex; align-items:center; gap: 8px; }
+#ace-app .score-stepper-row { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+#ace-app .score-stepper { display:flex; align-items:center; gap: 6px; flex-shrink:0; }
 #ace-app .score-stepper-btn {
-  width: 40px; height: 40px; min-width: 40px; border-radius: 50%;
+  width: 36px; height: 36px; min-width: 36px; flex-shrink:0; border-radius: 50%;
   background: var(--court-3); border: 1px solid var(--line); color: var(--chalk);
-  font-family: 'Bebas Neue'; font-size: 22px; line-height: 1;
+  font-family: 'Bebas Neue'; font-size: 20px; line-height: 1;
   display:flex; align-items:center; justify-content:center;
   cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
   transition: background .15s, border-color .15s, transform .08s, color .15s;
@@ -475,15 +476,21 @@
 #ace-app .score-stepper-btn:active { transform: scale(0.9); background: var(--clay); border-color: var(--clay); color: var(--chalk); }
 #ace-app .score-stepper-btn.dec { color: var(--muted); }
 #ace-app .score-stepper-value {
-  width: 48px; height: 40px; flex-shrink:0; border-radius: 8px;
+  width: 42px; height: 36px; flex-shrink:0; border-radius: 8px;
   background: var(--court); border: 1px solid var(--line); color: var(--chalk);
-  font-family: 'Bebas Neue'; font-size: 22px; text-align: center;
+  font-family: 'Bebas Neue'; font-size: 20px; text-align: center;
   caret-color: transparent; cursor: default;
 }
 #ace-app .score-stepper-value::-webkit-inner-spin-button,
 #ace-app .score-stepper-value::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #ace-app .score-stepper-value { -moz-appearance: textfield; }
-#ace-app .score-stepper-vs { color: var(--muted); font-family: 'Bebas Neue'; font-size: 20px; padding: 0 2px; }
+#ace-app .score-stepper-vs { color: var(--muted); font-family: 'Bebas Neue'; font-size: 18px; padding: 0 2px; flex-shrink:0; }
+/* En modales angostos (o el propio modal recortado), si no alcanza el ancho para las
+   dos mitades lado a lado, se apilan en vez de amontonarse/pisarse. */
+@media (max-width: 420px) {
+  #ace-app .score-stepper-row { flex-direction: column; gap: 10px; }
+  #ace-app .score-stepper-vs { display: none; }
+}
 
 #ace-app .modal-actions { display:flex; justify-content:flex-end; gap: 8px; margin-top: 18px; }
 #ace-app .photo-picker { display:flex; align-items:center; gap: 12px; }
@@ -1655,7 +1662,7 @@ function scoreStepperFieldHtml(id, max, tag){
 }
 // Genera la fila completa "Lado A  –  Lado B" para un set, lista para insertar en un .field.
 function scoreStepperRowHtml(idA, idB, max, tagA, tagB){
-  return `<div style="display:flex;align-items:center;justify-content:center;gap:14px;">
+  return `<div class="score-stepper-row">
     ${scoreStepperFieldHtml(idA, max, tagA)}
     <span class="score-stepper-vs">–</span>
     ${scoreStepperFieldHtml(idB, max, tagB)}
