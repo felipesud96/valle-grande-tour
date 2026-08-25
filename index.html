@@ -964,6 +964,13 @@ const RANK_TIERS = [
   { id:'diamond',  label:'Diamante',  emoji:'💎', min:450,  color:'#7EC8E3' },
   { id:'legend',   label:'Leyenda',   emoji:'👑', min:900,  color:'#FFD700', secret:true },
 ];
+// Formatea puntos de ranking para mostrar: entero si es exacto, o con 1 decimal como máximo
+// (evita los "123.45678" que salían por los multiplicadores de categoría/partido libre).
+function fmtPts(n){
+  n = Number(n) || 0;
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
 function rankTierInfo(points){
   points = points || 0;
   let idx = 0;
@@ -994,7 +1001,7 @@ function rankProgressBarHtml(points){
   } else if(info.next.secret){
     nextText = '¿Habrá algo más allá de Diamante? 👀';
   } else {
-    nextText = `${info.next.min - points > 0 ? info.next.min - points : 0} pts para ${info.next.emoji} ${info.next.label}`;
+    nextText = `${fmtPts(info.next.min - points > 0 ? info.next.min - points : 0)} pts para ${info.next.emoji} ${info.next.label}`;
   }
   return `<div style="margin-top:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
@@ -1330,7 +1337,7 @@ async function generatePlayerCardImage(playerId){
   const statY = 660;
   const stats = [
     { label:'POSICIÓN', value: pos>0?('#'+pos):'—' },
-    { label:'PUNTOS', value: pts },
+    { label:'PUNTOS', value: fmtPts(pts) },
     { label:'VICTORIAS', value: wins },
     { label:'DERROTAS', value: losses },
   ];
@@ -1401,7 +1408,7 @@ async function generateRankingCardImage(){
     ctx.textAlign = 'right';
     ctx.font = 'bold 34px "Bebas Neue", sans-serif';
     ctx.fillStyle = '#D4AF37';
-    ctx.fillText(`${r.points} pts`, W-60, rowY+10);
+    ctx.fillText(`${fmtPts(r.points)} pts`, W-60, rowY+10);
 
     y += 110;
   }
@@ -2432,7 +2439,7 @@ function circuitAwards(){
   // 1. El GOAT (Más puntos totales)
   let goat = null, maxPts = -1;
   state.players.forEach(p => { const t = (sPts[p.id]||0) + (dPts[p.id]||0); if(t > maxPts) { maxPts = t; goat = p; }});
-  if(goat && maxPts > 0) list.push({emoji:'🐐', title:'El GOAT del Circuito', who:esc(goat.name), desc:`El jugador con más puntos totales acumulados entre singles y dobles combinados (${maxPts} pts). Mira "Logros Singles" y "Logros Dobles" para ver el GOAT de cada disciplina por separado.`});
+  if(goat && maxPts > 0) list.push({emoji:'🐐', title:'El GOAT del Circuito', who:esc(goat.name), desc:`El jugador con más puntos totales acumulados entre singles y dobles combinados (${fmtPts(maxPts)} pts). Mira "Logros Singles" y "Logros Dobles" para ver el GOAT de cada disciplina por separado.`});
 
   // 2. El Emperador (Mayor % de victorias, min 3 partidos)
   let emp = null, maxPct = -1;
@@ -2840,7 +2847,7 @@ function nextMatchWidgetHtml(playerId){
         ${playerAvatarHtml(p, 56)}
         <div>
           <h2 style="margin:0;">${esc(p.name)}</h2>
-          <div class="tourn-meta">Posición #${pos > 0 ? pos : '—'} · ${pts} pts</div>
+          <div class="tourn-meta">Posición #${pos > 0 ? pos : '—'} · ${fmtPts(pts)} pts</div>
         </div>
       </div>
       ${rankProgressBarHtml(pts)}
@@ -3071,12 +3078,12 @@ function viewRanking(){
           <div class="rank-name-block">
             <span class="rank-name">${esc(r.name)}${p && p.alias ? ` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>` : ''} ${trendBadgeHtml(trend)} ${rankBadgeHtml(r.points, 'small')}</span>
             <span class="rank-meta">${(titlesByPlayer(state.tournaments, false)[r.id] || 0)} título(s) · ${p ? playerMetaShort(p) : ''} ${streakBadgeHtml(streak)}</span>
-            ${expiring ? `<span class="rank-expiry-warn">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')}</span>` : ''}
+            ${expiring ? `<span class="rank-expiry-warn">⚠️ ${fmtPts(expiring.points)} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')}</span>` : ''}
           </div>
         </div>
         <div class="rank-actions">
           <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">⚔️</button>
-          <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
+          <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span><span class="lbl">pts</span></div>
         </div>
       </div>
     `;
@@ -3449,7 +3456,7 @@ function viewDoubles(){
         <span class="rank-meta">Ranking de dobles</span>
         ${(()=>{ const exp = pointsExpiringSoon(r.id, true); return exp ? `<span class="rank-expiry-warn">⚠️ ${exp.points} pts vencen el ${exp.expiryDate.toLocaleDateString('es-CL')}</span>` : ''; })()}
       </div>
-      <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
+      <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span><span class="lbl">pts</span></div>
     </div>`;
   }).join('') : `<div class="empty">Sin puntos de dobles todavía.</div>`;
 
@@ -3930,15 +3937,15 @@ function computeLeagueTitlesFor(agg, matchesList){
 // grilla de títulos de cada subcategoría y también en "Mi perfil".
 function goatTitleFromPoints(pts, key, title, desc){
   const ranked = Object.keys(pts).map(id=>({id, v:pts[id]})).filter(r=>r.v>0).sort((a,b)=>b.v-a.v);
-  const base = { key, e:'🐐', t:title, d:desc, category:'goat', direction:'max', fmt:v=>`${v} pts` };
+  const base = { key, e:'🐐', t:title, d:desc, category:'goat', direction:'max', fmt:v=>`${fmtPts(v)} pts` };
   if(ranked.length===0){
     return { ...base, holderId:null, value:null, display:null, runnerUpId:null, runnerUpValue:null, runnerUpDisplay:null };
   }
   const winner = ranked[0], runnerUp = ranked[1] || null;
-  return { ...base, holderId:winner.id, value:winner.v, display:`${winner.v} pts`,
+  return { ...base, holderId:winner.id, value:winner.v, display:`${fmtPts(winner.v)} pts`,
     runnerUpId: runnerUp ? runnerUp.id : null,
     runnerUpValue: runnerUp ? runnerUp.v : null,
-    runnerUpDisplay: runnerUp ? `${runnerUp.v} pts` : null };
+    runnerUpDisplay: runnerUp ? `${fmtPts(runnerUp.v)} pts` : null };
 }
 function computeSinglesGoatTitle(){
   return goatTitleFromPoints(singlesPointsByPlayer(), 'goatSingles', 'El GOAT · Singles',
@@ -4865,7 +4872,7 @@ function recordsAndComparisonsHtml(){
   const improvedHtml = improved.length ? improved.map((x,i)=>`
     <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
       <span>${medal(i)} ${esc(x.p.name)}</span>
-      <span style="color:var(--ball);font-weight:600;">+${x.gained} pts (últimos 30 días)</span>
+      <span style="color:var(--ball);font-weight:600;">+${fmtPts(x.gained)} pts (últimos 30 días)</span>
     </div>`).join('') : `<div class="empty" style="padding:14px;">Nadie sumó puntos de individuales en los últimos 30 días.</div>`;
 
   const svdHtml = svd.length ? svd.map(x=>`
@@ -5771,11 +5778,11 @@ function openPlayerProfileModal(playerId){
       <div>
         <h2 style="margin:0;">${esc(p.name)}</h2>
         ${p.alias?`<div style="color:var(--ball);font-style:italic;font-size:13.5px;">"${esc(p.alias)}"</div>`:''}
-        <div class="tourn-meta">${pos?`#${pos} del ranking individual`:'Sin ranking todavía'} · ${pts} pts</div>
+        <div class="tourn-meta">${pos?`#${pos} del ranking individual`:'Sin ranking todavía'} · ${fmtPts(pts)} pts</div>
       </div>
     </div>
     ${liveEntry ? liveMatchCardHtml(liveEntry) : ''}
-    ${expiring ? `<div class="section-sub" style="color:#D8A34C;">⚠️ ${expiring.points} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')} si no suma más antes de esa fecha.</div>` : ''}
+    ${expiring ? `<div class="section-sub" style="color:#D8A34C;">⚠️ ${fmtPts(expiring.points)} pts vencen el ${expiring.expiryDate.toLocaleDateString('es-CL')} si no suma más antes de esa fecha.</div>` : ''}
     ${formTrackerHtml(playerId)}
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0;">
       <div class="card" style="padding:12px;text-align:center;"><div class="disp" style="font-size:22px;">${wins}-${losses}</div><div class="tourn-meta">Récord (V-D)</div></div>
