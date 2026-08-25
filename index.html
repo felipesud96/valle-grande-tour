@@ -2992,8 +2992,10 @@ function rankingEvolutionSvg(){
   </div>`;
 }
 function trendBadgeHtml(delta){
-  if(delta > 0) return `<span class="rank-trend up">▲${delta}</span>`;
-  if(delta < 0) return `<span class="rank-trend down">▼${Math.abs(delta)}</span>`;
+  const formattedDelta = Number(Math.abs(delta).toFixed(1));
+  
+  if(delta > 0.05) return `<span class="rank-trend up">▲${formattedDelta}</span>`;
+  if(delta < -0.05) return `<span class="rank-trend down">▼${formattedDelta}</span>`;
   return `<span class="rank-trend flat">–</span>`;
 }
 function streakBadgeHtml(streak){
