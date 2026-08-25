@@ -208,7 +208,7 @@
   background: var(--court-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
 }
 #ace-app .rank-row.top1 { border-color: var(--ball); background: linear-gradient(90deg, rgba(214,226,75,0.12), var(--court-2)); }
-#ace-app .rank-pos { font-family:'Bebas Neue'; font-size: 26px; color: var(--muted); text-align:center; }
+#ace-app .rank-pos { font-family:'Bebas Neue'; font-size: 26px; color: var(--muted); text-align:center; font-variant-numeric: tabular-nums; }
 #ace-app .rank-row.top1 .rank-pos, #ace-app .rank-row.top2 .rank-pos, #ace-app .rank-row.top3 .rank-pos { color: var(--ball); }
 #ace-app .avatar {
   width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
@@ -219,7 +219,7 @@
 #ace-app .rank-name { font-weight: 700; font-size: 15px; }
 #ace-app .rank-meta { font-size: 11.5px; color: var(--muted); }
 #ace-app .rank-pts { text-align:right; }
-#ace-app .rank-pts .num { font-family:'Bebas Neue'; font-size: 22px; color: var(--ball); }
+#ace-app .rank-pts .num { font-family:'Bebas Neue'; font-size: 22px; color: var(--ball); font-variant-numeric: tabular-nums; }
 #ace-app .rank-pts .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; }
 
 /* ---------- ON FIRE (racha de 3+ victorias seguidas) ---------- */
@@ -489,6 +489,7 @@
 }
 @keyframes aceSpin { to { transform: rotate(360deg); } }
 #ace-app .btn:disabled { opacity:0.7; cursor:default; }
+#ace-app .disp, #ace-app .num, #ace-app .amt { font-variant-numeric: tabular-nums; }
 
 /* ---------- ANIMACIÓN DE ASCENSO DE RANGO ---------- */
 #ace-app .rankup-overlay {
@@ -657,11 +658,11 @@
 #ace-app .award-who { font-size:13px; font-weight:700; }
 #ace-app .award-desc { font-size:11px; color:var(--muted); margin-top:4px; }
   @keyframes fadeTab {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateX(14px); }
+    to   { opacity: 1; transform: translateX(0); }
   }
   .fade-tab {
-    animation: fadeTab 0.3s ease-out forwards;
+    animation: fadeTab 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   #ace-splash {
     position: fixed; inset: 0; z-index: 9999;
@@ -939,11 +940,15 @@ let TIERS = [
 ];
 
 // ---------- NIVELES / RANGOS DEL JUGADOR (según puntos acumulados de ranking) ----------
+// Umbrales calibrados para el sistema de puntos por games × multiplicador de categoría:
+// un jugador activo (3-5 eventos al mes) suma ~60-100 pts/mes, así que Diamante
+// queda al alcance del más dominante en una temporada normal (~4 meses).
 const RANK_TIERS = [
   { id:'bronze',   label:'Bronce',    emoji:'🥉', min:0,    color:'#B08D57' },
-  { id:'silver',   label:'Plata',     emoji:'🥈', min:500,  color:'#C7D0D6' },
-  { id:'gold',     label:'Oro',       emoji:'🥇', min:1500, color:'#D4AF37' },
-  { id:'diamond',  label:'Diamante',  emoji:'💎', min:3000, color:'#7EC8E3' },
+  { id:'silver',   label:'Plata',     emoji:'🥈', min:80,   color:'#C7D0D6' },
+  { id:'gold',     label:'Oro',       emoji:'🥇', min:220,  color:'#D4AF37' },
+  { id:'diamond',  label:'Diamante',  emoji:'💎', min:450,  color:'#7EC8E3' },
+  { id:'legend',   label:'Leyenda',   emoji:'👑', min:900,  color:'#FFD700', secret:true },
 ];
 function rankTierInfo(points){
   points = points || 0;
@@ -967,9 +972,16 @@ function rankBadgeHtml(points, size){
 }
 function rankProgressBarHtml(points){
   const info = rankTierInfo(points);
-  const nextText = info.next
-    ? `${info.next.min - points > 0 ? info.next.min - points : 0} pts para ${info.next.emoji} ${info.next.label}`
-    : '¡Rango máximo del circuito!';
+  // El siguiente rango se oculta si es secreto y todavía no se alcanza (ej. Leyenda) —
+  // se ve solo un indicio misterioso en vez del nombre, para que se sienta un logro oculto.
+  let nextText;
+  if(!info.next){
+    nextText = '¡Rango máximo del circuito!';
+  } else if(info.next.secret){
+    nextText = '¿Habrá algo más allá de Diamante? 👀';
+  } else {
+    nextText = `${info.next.min - points > 0 ? info.next.min - points : 0} pts para ${info.next.emoji} ${info.next.label}`;
+  }
   return `<div style="margin-top:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
       <span style="font-size:12.5px;font-weight:600;color:${info.current.color};">${info.current.emoji} ${info.current.label}</span>
@@ -1451,11 +1463,32 @@ const SUGGESTED_ACHIEVEMENTS = [
   { e:'🌅', t:'Madrugador', d:'El que siempre llega primero a calentar.' },
 ];
 
-let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {}, achSubTab: null, achCategory: 'all', achSearch: '', surface: 'clay', soundsOn: true, predictions: [] };
+let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {}, achSubTab: null, achCategory: 'all', achSearch: '', surface: 'clay', soundsOn: true, predictions: [], tournamentsSubTab: 'singles' };
 let tempPhoto = null; // holds base64 during player modal session
 let tempLinkAsMe = false; // whether the player modal in progress should self-link on save
 
 function tierOf(id){ return TIERS.find(t=>t.id===id); }
+// Restricción de frecuencia: 250 libre, 500 cada 30 días, Masters 1000 cada 60, GS cada 120.
+// Se mide contra el torneo más reciente de la MISMA categoría en esa modalidad (singles o dobles, por separado).
+const TIER_MIN_GAP_DAYS = { '250': 0, '500': 30, 'masters': 60, 'slam': 120 };
+function checkTierFrequency(list, tierId, newDateStr){
+  const minGap = TIER_MIN_GAP_DAYS[tierId] || 0;
+  if(minGap === 0) return null;
+  const newDate = new Date(newDateStr);
+  if(isNaN(newDate)) return null; // sin fecha válida no podemos comparar, se deja pasar
+  let mostRecentViolation = null;
+  list.filter(t=>t.tier===tierId && t.date).forEach(t=>{
+    const d = new Date(t.date);
+    if(isNaN(d)) return;
+    const diffDays = Math.abs((newDate - d) / (1000*60*60*24));
+    if(diffDays < minGap && (!mostRecentViolation || d > mostRecentViolation)) mostRecentViolation = d;
+  });
+  if(!mostRecentViolation) return null;
+  const nextAllowed = new Date(mostRecentViolation);
+  nextAllowed.setDate(nextAllowed.getDate() + minGap);
+  const tier = tierOf(tierId);
+  return `No puedes crear otro torneo ${tier ? tier.label : tierId} todavía — hay uno muy cercano en fecha. El próximo estaría disponible a partir del ${nextAllowed.toLocaleDateString('es-CL')}.`;
+}
 function fmtMoney(n){ return '$' + Math.round(n).toLocaleString('es-CL'); }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -1542,6 +1575,10 @@ async function loadAll(){
   if(tierPoints){
     TIERS.forEach(t=>{ if(tierPoints[t.id]) t.points = {...t.points, ...tierPoints[t.id]}; });
   }
+  const savedMultipliers = await safeGet('tier-multipliers', null);
+  if(savedMultipliers){
+    TIER_POINT_MULTIPLIER = { ...TIER_POINT_MULTIPLIER, ...savedMultipliers };
+  }
   state.surface = await safeGet('surface-theme', 'clay', false);
   state.soundsOn = await safeGet('sounds-on', true, false);
   applySurfaceTheme();
@@ -1584,22 +1621,30 @@ function isPointsExpired(dateStr){
 }
 
 // ---------- COMPUTATION ----------
+// Multiplicador de puntos por categoría del torneo: un game ganado vale distinto
+// según sea Copa 250, Abierto 500, Masters 1000 o Grand Slam del Circuito.
+// Los partidos libres siempre valen 1x (sin multiplicador).
+let TIER_POINT_MULTIPLIER = { '250': 1, '500': 1.5, 'masters': 2, 'slam': 2.5 };
+function tierPointMultiplier(tierId){
+  return TIER_POINT_MULTIPLIER[tierId] != null ? TIER_POINT_MULTIPLIER[tierId] : 1;
+}
 function singlesPointEvents() {
   const events = [];
-  // 1. Games de Torneos Individuales
+  // 1. Games de Torneos Individuales (multiplicados por la categoría del torneo)
   state.tournaments.forEach(t => {
+    const mult = tierPointMultiplier(t.tier);
     if (t.bracket) {
       t.bracket.flat().forEach(m => {
         if (m.sets && m.p1 && m.p2) {
           let g1 = 0, g2 = 0;
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
-          events.push({ playerId: m.p1, points: g1, date: t.date, label: t.name });
-          events.push({ playerId: m.p2, points: g2, date: t.date, label: t.name });
+          events.push({ playerId: m.p1, points: Math.round(g1*mult*10)/10, date: t.date, label: t.name });
+          events.push({ playerId: m.p2, points: Math.round(g2*mult*10)/10, date: t.date, label: t.name });
         }
       });
     }
   });
-  // 2. Games de Partidos Libres en modalidad SINGLES
+  // 2. Games de Partidos Libres en modalidad SINGLES (siempre 1x)
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'singles' || !m.mode) {
       let gA = 0, gB = 0;
@@ -1621,8 +1666,9 @@ function singlesPointsByPlayer() {
 
 function doublesPointEvents() {
   const events = [];
-  // 1. Games de Torneos de Dobles
+  // 1. Games de Torneos de Dobles (multiplicados por la categoría del torneo)
   state.doubles.forEach(t => {
+    const mult = tierPointMultiplier(t.tier);
     if (t.bracket) {
       t.bracket.flat().forEach(m => {
         if (m.sets && m.p1 && m.p2) {
@@ -1630,13 +1676,13 @@ function doublesPointEvents() {
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
           const pair1 = t.pairs[Number(m.p1)] || [];
           const pair2 = t.pairs[Number(m.p2)] || [];
-          pair1.forEach(pid => events.push({ playerId: pid, points: g1, date: t.date, label: t.name }));
-          pair2.forEach(pid => events.push({ playerId: pid, points: g2, date: t.date, label: t.name }));
+          pair1.forEach(pid => events.push({ playerId: pid, points: Math.round(g1*mult*10)/10, date: t.date, label: t.name }));
+          pair2.forEach(pid => events.push({ playerId: pid, points: Math.round(g2*mult*10)/10, date: t.date, label: t.name }));
         }
       });
     }
   });
-  // 2. Games de Partidos Libres en modalidad DOBLES
+  // 2. Games de Partidos Libres en modalidad DOBLES (siempre 1x)
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'doubles') {
       let gA = 0, gB = 0;
@@ -2325,7 +2371,43 @@ function autoBadges(playerId){
   if (receivedCount >= 2 && receivedCount === maxReceived) {
     badges.push({ e: '🎯', t: 'El Más Desafiado' });
   }
+  if(hasFiloDeNavaja(playerId) || hasFiloDeNavajaDoubles(playerId)){
+    badges.push({ e:'🗡️', t:'Filo de Navaja' });
+  }
   return badges;
+}
+// Insignia de modo Sudden Death: el campeón de un torneo marcado como Sudden Death
+// que no perdió NINGÚN game en todo el torneo se lleva esta insignia especial.
+function hasFiloDeNavaja(playerId){
+  return state.tournaments.some(t=>{
+    if(!t.suddenDeath || t.status!=='completed' || !t.bracket) return false;
+    const championIds = t.results.champion || [];
+    if(!championIds.includes(playerId)) return false;
+    let gamesLost = 0, playedAny = false;
+    t.bracket.flat().forEach(m=>{
+      if(!m.sets) return;
+      if(m.p1===playerId){ playedAny = true; m.sets.forEach(s=>{ gamesLost += Number(s[1])||0; }); }
+      else if(m.p2===playerId){ playedAny = true; m.sets.forEach(s=>{ gamesLost += Number(s[0])||0; }); }
+    });
+    return playedAny && gamesLost===0;
+  });
+}
+function hasFiloDeNavajaDoubles(playerId){
+  return state.doubles.some(t=>{
+    if(!t.suddenDeath || t.status!=='completed' || !t.bracket) return false;
+    const championPairIdx = (t.results.champion||[])[0];
+    if(championPairIdx==null) return false;
+    const pair = t.pairs[championPairIdx];
+    if(!pair || !pair.includes(playerId)) return false;
+    const pairKey = String(championPairIdx);
+    let gamesLost = 0, playedAny = false;
+    t.bracket.flat().forEach(m=>{
+      if(!m.sets) return;
+      if(m.p1===pairKey){ playedAny = true; m.sets.forEach(s=>{ gamesLost += Number(s[1])||0; }); }
+      else if(m.p2===pairKey){ playedAny = true; m.sets.forEach(s=>{ gamesLost += Number(s[0])||0; }); }
+    });
+    return playedAny && gamesLost===0;
+  });
 }
 
 function singlesRankingList(){
@@ -2579,13 +2661,15 @@ function rankingEvolutionSvg(){
   state.players.forEach(p=> series[p.id]=[0]);
 
   completed.forEach(t=>{
-    const tier = tierOf(t.tier);
-    if(!tier) return;
-    const assigned = new Set();
-    ['champion','finalist','semi','quarter'].forEach(role=>{
-      (t.results[role]||[]).forEach(pid=>{ cumulative[pid]=(cumulative[pid]||0)+tier.points[role]; assigned.add(pid); });
+    // Mismo cálculo que el ranking real: games ganados × multiplicador de la categoría.
+    const mult = tierPointMultiplier(t.tier);
+    (t.bracket||[]).flat().forEach(m=>{
+      if(!m.sets || !m.p1 || !m.p2) return;
+      let g1=0, g2=0;
+      m.sets.forEach(s=>{ g1 += Number(s[0])||0; g2 += Number(s[1])||0; });
+      if(cumulative[m.p1]!==undefined) cumulative[m.p1] += Math.round(g1*mult*10)/10;
+      if(cumulative[m.p2]!==undefined) cumulative[m.p2] += Math.round(g2*mult*10)/10;
     });
-    (t.participants||[]).forEach(pid=>{ if(!assigned.has(pid)) cumulative[pid]=(cumulative[pid]||0)+tier.points.r1; });
     state.players.forEach(p=> series[p.id].push(cumulative[p.id]||0));
   });
 
@@ -2754,10 +2838,20 @@ function playerMetaShort(p){
 
 // ---------- VIEW: TOURNAMENTS ----------
 function viewTournaments(){
-  const head = `<div class="section-head"><h2>Torneos</h2><div style="display:flex;gap:8px;flex-wrap:wrap;">${state.isAdmin?`<button class="btn btn-primary" onclick="AceApp.openTournamentModal()">+ Nuevo torneo</button>`:''}</div></div>
-  <div class="section-sub">Cada categoría define puntos para el campeón y el valor de la cuota, igual que en el circuito profesional. ${ruleDescription()}</div>`;
+  const subTab = state.tournamentsSubTab || 'singles';
+  const isDoublesSub = subTab === 'doubles';
+  const head = `<div class="section-head"><h2>Torneos</h2>${state.isAdmin?`<button class="btn btn-primary" onclick="${isDoublesSub?'AceApp.openDoublesModal()':'AceApp.openTournamentModal()'}">+ Nuevo torneo ${isDoublesSub?'de dobles':'individual'}</button>`:''}</div>
+  <div class="section-sub">Los puntos de ranking salen de los games que ganas, multiplicados según la categoría del torneo (250 ×1 · 500 ×1.5 · Masters 1000 ×2 · Grand Slam ×2.5). Los partidos libres valen ×1. ${ruleDescription()}</div>
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn ${!isDoublesSub?'btn-primary':'btn-ghost'} btn-sm" onclick="AceApp.setTournamentsSubTab('singles')">🎾 Individual</button>
+    <button class="btn ${isDoublesSub?'btn-primary':'btn-ghost'} btn-sm" onclick="AceApp.setTournamentsSubTab('doubles')">👥 Dobles</button>
+  </div>`;
+  return head + (isDoublesSub ? doublesTournamentsCardsHtml() : singlesTournamentsCardsHtml());
+}
+function setTournamentsSubTab(sub){ state.tournamentsSubTab = sub; render(); }
+function singlesTournamentsCardsHtml(){
   if(state.tournaments.length===0){
-    return head + `<div class="empty"><span class="disp">Aún no hay torneos</span>${state.isAdmin?'Crea el primero y define su categoría.':'El administrador todavía no crea ninguno.'}</div>`;
+    return `<div class="empty"><span class="disp">Aún no hay torneos individuales</span>${state.isAdmin?'Crea el primero y define su categoría.':'El administrador todavía no crea ninguno.'}</div>`;
   }
   const sortBar = `<div class="field" style="max-width:240px;margin-bottom:16px;">
     <label>Ordenar por</label>
@@ -2809,7 +2903,7 @@ function viewTournaments(){
       </div>
     </div>`;
   }).join('');
-  return head + sortBar + cards;
+  return sortBar + cards;
 }
 function podiumHtml(t, isDoubles){
   const nameOf = isDoubles ? (idx=> (t.pairs[idx]||[]).map(playerName).join(' / ')) : (pid=>playerName(pid));
@@ -2949,25 +3043,8 @@ function filterPlayers(term){
 function setTournamentSort(v){ state.tournamentSort = v; render(); }
 
 // ---------- VIEW: DOUBLES ----------
-function viewDoubles(){
-  const rankList = doublesRankingList();
-  const rankHtml = rankList.length ? rankList.map((r,i)=>{
-    const p = playerById(r.id);
-    return `
-    <div class="rank-row ${i===0?'top1':''}">
-      <div class="rank-pos">${i+1}</div>
-      ${playerAvatarHtml(p,46)}
-      <div class="rank-name-block">
-        <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(recentPointsTrend(r.id, true))}</span>
-        <span class="rank-meta">Ranking de dobles</span>
-        ${(()=>{ const exp = pointsExpiringSoon(r.id, true); return exp ? `<span class="rank-expiry-warn">⚠️ ${exp.points} pts vencen el ${exp.expiryDate.toLocaleDateString('es-CL')}</span>` : ''; })()}
-      </div>
-      <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
-    </div>`;
-  }).join('') : `<div class="empty">Sin puntos de dobles todavía.</div>`;
-
-  const head = `<div class="section-head"><h2>Dobles</h2>${state.isAdmin?`<button class="btn btn-primary" onclick="AceApp.openDoublesModal()">+ Nuevo torneo de dobles</button>`:''}</div>
-  <div class="section-sub">${ruleDescription()}</div>`;
+function doublesTournamentsCardsHtml(){
+  const head = `<div class="section-sub" style="margin-bottom:14px;">${ruleDescription()}</div>`;
   const tournHtml = state.doubles.length===0 ? `<div class="empty"><span class="disp">Sin torneos de dobles</span>${state.isAdmin?'Arma las primeras parejas.':'El administrador todavía no crea ninguno.'}</div>` :
     [...state.doubles].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>{
       const tier = tierOf(t.tier);
@@ -2997,11 +3074,29 @@ function viewDoubles(){
         </div>
       </div>`;
     }).join('');
+  return head + tournHtml;
+}
+function viewDoubles(){
+  const rankList = doublesRankingList();
+  const rankHtml = rankList.length ? rankList.map((r,i)=>{
+    const p = playerById(r.id);
+    return `
+    <div class="rank-row ${i===0?'top1':''}">
+      <div class="rank-pos">${i+1}</div>
+      ${playerAvatarHtml(p,46)}
+      <div class="rank-name-block">
+        <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(recentPointsTrend(r.id, true))}</span>
+        <span class="rank-meta">Ranking de dobles</span>
+        ${(()=>{ const exp = pointsExpiringSoon(r.id, true); return exp ? `<span class="rank-expiry-warn">⚠️ ${exp.points} pts vencen el ${exp.expiryDate.toLocaleDateString('es-CL')}</span>` : ''; })()}
+      </div>
+      <div class="rank-pts"><span class="num">${r.points}</span><span class="lbl">pts</span></div>
+    </div>`;
+  }).join('') : `<div class="empty">Sin puntos de dobles todavía.</div>`;
 
   return `<div class="section-head"><h2>Ranking de dobles</h2></div>
+  <div class="section-sub">¿Buscas crear o gestionar un torneo de dobles? Eso ahora se hace desde la pestaña <strong>Torneos</strong>.</div>
   ${liveMatchesBannerHtml()}
   <div class="rank-table" style="margin-bottom:30px;">${rankHtml}</div>
-  ${head}${tournHtml}
   ${casualMatchesListHtml('doubles')}`;
 }
 
@@ -4612,22 +4707,19 @@ async function handleRestoreFile(ev){
 // ---- settings: match rules & tier fees ----
 function openSettingsModal(){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede cambiar las reglas y cuotas.'); return; }
-  const roleLabels = [['champion','Campeón'],['finalist','Finalista'],['semi','Semifinal'],['quarter','Cuartos'],['r1','1ª ronda']];
   const tierRows = TIERS.map(t=>`
     <div class="card" style="margin-bottom:10px;">
       <div class="field-row" style="align-items:flex-end;">
         <div class="field" style="flex:2;"><label>${esc(t.label)}</label></div>
         <div class="field"><label>Cuota</label><input type="number" min="0" step="500" id="s-fee-${t.id}" value="${t.fee}"></div>
+        <div class="field"><label>Multiplicador de puntos</label><input type="number" min="0.1" step="0.1" id="s-mult-${t.id}" value="${tierPointMultiplier(t.id)}"></div>
       </div>
-      <div class="tourn-meta" style="margin:6px 0 4px;">Puntos por ronda alcanzada</div>
-      <div class="field-row" style="flex-wrap:wrap;gap:8px;">
-        ${roleLabels.map(([role,label])=>`<div class="field" style="min-width:70px;flex:1;"><label>${label}</label><input type="number" min="0" id="s-pts-${t.id}-${role}" value="${t.points[role]}"></div>`).join('')}
-      </div>
+      <div class="tourn-meta" style="margin-top:4px;">Los puntos de ranking salen de: games ganados × este multiplicador.</div>
     </div>`).join('');
   const html = `
     <button class="close-x" onclick="AceApp.closeModal()">✕</button>
     <h2>Reglas y cuotas</h2>
-    <div class="section-sub">Esto aplica a los torneos que crees de aquí en adelante (los ya creados mantienen su cuota y puntos originales). La modalidad de partido de aquí abajo es solo la que viene preseleccionada al crear un torneo nuevo — en cada torneo la puedes cambiar individualmente.</div>
+    <div class="section-sub">Esto aplica a los torneos que crees de aquí en adelante (los ya creados mantienen su cuota original). El multiplicador SÍ afecta los puntos de torneos ya jugados, porque el ranking se recalcula siempre en vivo. La modalidad de partido de aquí abajo es solo la que viene preseleccionada al crear un torneo nuevo — en cada torneo la puedes cambiar individualmente.</div>
     <div class="field">
       <label>Modalidad de partido por defecto</label>
       <select id="s-format">
@@ -4636,7 +4728,7 @@ function openSettingsModal(){
       </select>
     </div>
     <div class="field"><label>Games para ganar un set (por defecto)</label><input type="number" min="1" max="9" id="s-games" value="${state.matchRules.gamesPerSet}"></div>
-    <h3 style="font-size:16px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Cuotas y puntos por categoría</h3>
+    <h3 style="font-size:16px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Cuotas y multiplicador de puntos por categoría</h3>
     ${tierRows}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
@@ -4653,22 +4745,18 @@ async function saveSettings(btn){
     await save('match-rules', state.matchRules, true);
 
     const tierFees = {};
-    const tierPoints = {};
+    const multipliers = {};
     TIERS.forEach(t=>{
       const val = Number(document.getElementById('s-fee-'+t.id).value);
       t.fee = isNaN(val) || val<0 ? t.fee : val;
       tierFees[t.id] = t.fee;
 
-      const pts = {};
-      ['champion','finalist','semi','quarter','r1'].forEach(role=>{
-        const pval = Number(document.getElementById(`s-pts-${t.id}-${role}`).value);
-        pts[role] = isNaN(pval) || pval<0 ? t.points[role] : pval;
-      });
-      t.points = pts;
-      tierPoints[t.id] = pts;
+      const mval = Number(document.getElementById('s-mult-'+t.id).value);
+      multipliers[t.id] = isNaN(mval) || mval<=0 ? tierPointMultiplier(t.id) : mval;
     });
+    TIER_POINT_MULTIPLIER = multipliers;
     await save('tier-fees', tierFees, true);
-    await save('tier-points', tierPoints, true);
+    await save('tier-multipliers', multipliers, true);
 
     closeModal(); render();
   });
@@ -5540,10 +5628,17 @@ async function deletePlayer(id){
 }
 
 function tierPickerHtml(selectedTier){
+  const freqLabel = (id) => {
+    const days = TIER_MIN_GAP_DAYS[id] || 0;
+    if(days===0) return 'sin límite';
+    if(days>=120) return 'cada 4 meses';
+    if(days>=60) return 'cada 2 meses';
+    return 'cada 30 días';
+  };
   return `<div class="tier-picker">` + TIERS.map(t=>`
     <div class="tier-opt ${selectedTier===t.id?'sel':''}" onclick="AceApp.selectTier('${t.id}')" id="tier-opt-${t.id}">
       <div class="tname">${t.short}</div>
-      <div class="tinfo">${t.points.champion} pts campeón · ${fmtMoney(t.fee)}</div>
+      <div class="tinfo">Puntos ×${tierPointMultiplier(t.id)} · ${fmtMoney(t.fee)} · ${freqLabel(t.id)}</div>
     </div>`).join('') + `</div><input type="hidden" id="f-tier" value="${selectedTier||TIERS[0].id}">`;
 }
 function selectTier(tid){
@@ -5560,6 +5655,10 @@ function openTournamentModal(id){
     <div class="field"><label>Nombre del torneo</label><input type="text" id="f-tname" value="${editing?esc(editing.name):''}" placeholder="Ej: Apertura de Verano"></div>
     <div class="field"><label>Fecha</label><input type="date" id="f-tdate" value="${editing?editing.date:''}"></div>
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
+      <input type="checkbox" id="f-sudden-death" style="width:auto;" ${editing && editing.suddenDeath ? 'checked' : ''}>
+      <label style="margin:0;">⚔️ Modo Sudden Death — cualquier game perdido pesa; si el campeón no pierde ni un solo game en todo el torneo, se lleva la insignia "Filo de Navaja"</label>
+    </div>
     ${matchRulesFieldsHtml('f', rules)}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
@@ -5571,7 +5670,13 @@ async function saveTournament(btn, id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede crear o editar torneos.'); return; }
   const name = document.getElementById('f-tname').value.trim();
   if(!name){ aceAlert('Ponle un nombre al torneo.'); return; }
-  const data = { name, date: document.getElementById('f-tdate').value, tier: document.getElementById('f-tier').value, matchRules: readMatchRulesFields('f') };
+  const tierId = document.getElementById('f-tier').value;
+  const dateVal = document.getElementById('f-tdate').value;
+  if(!id){
+    const block = checkTierFrequency(state.tournaments, tierId, dateVal);
+    if(block){ aceAlert(block); return; }
+  }
+  const data = { name, date: dateVal, tier: tierId, suddenDeath: document.getElementById('f-sudden-death').checked, matchRules: readMatchRulesFields('f') };
   await withLoading(btn, 'Guardando...', async () => {
     if(id){
       Object.assign(state.tournaments.find(t=>t.id===id), data);
@@ -5732,6 +5837,10 @@ function openDoublesModal(id){
     <div class="field"><label>Nombre del torneo</label><input type="text" id="f-dname" value="${editing?esc(editing.name):''}" placeholder="Ej: Copa Dobles Otoño"></div>
     <div class="field"><label>Fecha</label><input type="date" id="f-ddate" value="${editing?editing.date:''}"></div>
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
+      <input type="checkbox" id="d-sudden-death" style="width:auto;" ${editing && editing.suddenDeath ? 'checked' : ''}>
+      <label style="margin:0;">⚔️ Modo Sudden Death — si la pareja campeona no pierde ni un solo game en todo el torneo, se lleva la insignia "Filo de Navaja"</label>
+    </div>
     ${matchRulesFieldsHtml('d', rules)}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
@@ -5743,7 +5852,13 @@ async function saveDoublesTournament(btn, id){
   if(!state.isAdmin){ aceAlert('Solo el administrador puede crear o editar torneos de dobles.'); return; }
   const name = document.getElementById('f-dname').value.trim();
   if(!name){ aceAlert('Ponle un nombre al torneo.'); return; }
-  const data = { name, date: document.getElementById('f-ddate').value, tier: document.getElementById('f-tier').value, matchRules: readMatchRulesFields('d') };
+  const tierId = document.getElementById('f-tier').value;
+  const dateVal = document.getElementById('f-ddate').value;
+  if(!id){
+    const block = checkTierFrequency(state.doubles, tierId, dateVal);
+    if(block){ aceAlert(block); return; }
+  }
+  const data = { name, date: dateVal, tier: tierId, suddenDeath: document.getElementById('d-sudden-death').checked, matchRules: readMatchRulesFields('d') };
   await withLoading(btn, 'Guardando...', async () => {
     if(id){
       Object.assign(state.doubles.find(t=>t.id===id), data);
@@ -6099,47 +6214,20 @@ async function toggleSounds(){
 
 // ---------- SONIDOS DE INTERACCIÓN (golpe de raqueta) ----------
 let __aceAudioCtx = null;
+const ACE_HIT_SOUND_SRC = 'data:audio/mpeg;base64,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';
+let __aceHitAudio = null;
 function playHitSound(){
   if(state.soundsOn === false) return;
   try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if(!Ctx) return;
-    if(!__aceAudioCtx) __aceAudioCtx = new Ctx();
-    const ctx = __aceAudioCtx;
-    if(ctx.state === 'suspended') ctx.resume();
-    const now = ctx.currentTime;
-
-    // Crujido corto de impacto: ruido filtrado con envolvente rápida (tipo "pock" de raqueta)
-    const bufferSize = Math.floor(ctx.sampleRate * 0.06);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for(let i=0;i<bufferSize;i++){ data[i] = (Math.random()*2-1) * (1 - i/bufferSize); }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.setValueAtTime(2200, now);
-    bandpass.Q.value = 1.1;
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.5, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-
-    noise.connect(bandpass).connect(noiseGain).connect(ctx.destination);
-
-    // Golpe grave breve que da cuerpo al "pock"
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.exponentialRampToValueAtTime(90, now + 0.08);
-    const oscGain = ctx.createGain();
-    oscGain.gain.setValueAtTime(0.25, now);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-    osc.connect(oscGain).connect(ctx.destination);
-
-    noise.start(now); noise.stop(now + 0.09);
-    osc.start(now); osc.stop(now + 0.1);
+    // Reutiliza un único <audio>; si ya está sonando, lo reinicia para permitir
+    // golpes seguidos (ej. varias acciones rápidas) sin que se corten entre sí.
+    if(!__aceHitAudio){
+      __aceHitAudio = new Audio(ACE_HIT_SOUND_SRC);
+      __aceHitAudio.volume = 0.55;
+    }
+    __aceHitAudio.currentTime = 0;
+    const p = __aceHitAudio.play();
+    if(p && p.catch) p.catch(()=>{});
   } catch(e){ /* silencioso: si el navegador bloquea audio, no interrumpe el flujo */ }
 }
 
@@ -6157,7 +6245,7 @@ window.AceApp = {
   openAchievementModal, saveAchievement, deleteAchievement, pickSuggested,
   togglePaid, markAllPaid, openExpenseModal, saveExpense, deleteExpense, bootApp,
   openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
-  filterPlayers, setTournamentSort, onCropZoom, applyCrop, toggleTextSize, initHolographicCards,
+  filterPlayers, setTournamentSort, setTournamentsSubTab, onCropZoom, applyCrop, toggleTextSize, initHolographicCards,
   setAchSubTab,setProfileMode, setAchCategory, setAchSearch, toggleShowcase,
   cycleSurface, toggleSounds,
 };
