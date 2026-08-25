@@ -31,6 +31,14 @@
   --muted: #ACA89D;
   --line: rgba(244,240,226,0.12);
 
+  /* Escala de espaciado consistente (punto 1): usar siempre uno de estos valores
+     en vez de números "a ojo" en márgenes/paddings nuevos. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+
   font-family: 'Work Sans', sans-serif;
   background: var(--court);
   color: var(--chalk);
@@ -178,21 +186,25 @@
   background: none; border: none; color: var(--muted); cursor: pointer;
   padding: 10px 16px 12px; white-space: nowrap; position: relative; top:1px;
   border-bottom: 3px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
 }
+#ace-app .tab svg { flex-shrink: 0; }
 #ace-app .tab.active { color: var(--ball); border-bottom-color: var(--ball); }
 #ace-app .tab:hover:not(.active) { color: var(--chalk); }
 /* ---------- SECTION ---------- */
 #ace-app .section { padding-top: 26px; }
-#ace-app .section-head { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom: 16px; flex-wrap: wrap;}
-#ace-app .section-head h2 { font-size: 26px; color: var(--chalk); margin:0; }
-#ace-app .section-sub { color: var(--muted); font-size: 13px; margin-top: -10px; margin-bottom: 18px; }
+#ace-app .section-head { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom: var(--sp-4); flex-wrap: wrap;}
+#ace-app .section-head h2 { font-family: 'Bebas Neue'; font-size: 30px; letter-spacing: 0.03em; color: var(--chalk); margin:0; font-weight: 400; }
+#ace-app .section-sub { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.5; margin-top: -8px; margin-bottom: var(--sp-5); }
 
 /* ---------- BUTTONS ---------- */
 #ace-app .btn {
   font-family: 'Work Sans'; font-weight: 600; font-size: 13px;
   border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent;
   display: inline-flex; align-items: center; gap: 6px;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
 }
+#ace-app .btn:active:not(:disabled) { transform: scale(0.96); filter: brightness(0.92); box-shadow: inset 0 1px 3px rgba(0,0,0,0.35); }
 #ace-app .btn-primary { background: var(--clay); color: var(--chalk); }
 #ace-app .btn-primary:hover { background: var(--clay-light); }
 #ace-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--chalk); }
@@ -284,7 +296,8 @@
 /* ---------- CARDS / GRID ---------- */
 #ace-app .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 #ace-app .card {
-  background: var(--court-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  background: var(--court-2); border: 1px solid var(--line); border-radius: 12px; padding: var(--sp-4);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.3);
 }
 #ace-app .player-card { text-align:center; position: relative; }
 #ace-app .player-card.holo {
@@ -302,8 +315,8 @@
   background:
     radial-gradient(circle at var(--holo-x) var(--holo-y), rgba(255,255,255,0.65), transparent 42%),
     linear-gradient(115deg,
-      rgba(255,60,150,0.4) 0%, rgba(255,200,0,0.4) 20%, rgba(80,255,180,0.4) 40%,
-      rgba(60,160,255,0.4) 60%, rgba(200,80,255,0.4) 80%, rgba(255,60,150,0.4) 100%);
+      rgba(255,215,90,0.45) 0%, rgba(255,240,180,0.45) 20%, rgba(212,175,55,0.45) 40%,
+      rgba(255,225,140,0.45) 60%, rgba(180,140,40,0.45) 80%, rgba(255,215,90,0.45) 100%);
   background-size: 200% 200%, 260% 260%;
   background-position: var(--holo-x) var(--holo-y), var(--holo-x) var(--holo-y);
   mix-blend-mode: color-dodge;
@@ -516,7 +529,8 @@
     justify-content: space-around; padding: 0 2px; max-width: none;
     box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
   }
-  #ace-app .tab { font-size: 10.5px; padding: 10px 4px 8px; flex: 1; text-align: center; white-space: normal; }
+  #ace-app .tab { font-size: 9.5px; padding: 8px 4px 7px; flex: 1; text-align: center; white-space: normal; flex-direction: column; gap: 2px; }
+  #ace-app .tab svg { width: 18px; height: 18px; }
   #ace-app .wrap { padding-bottom: 76px; }
 }
   /* ---------- BRACKET VISUAL (ÁRBOL DE TORNEO) ---------- */
@@ -2014,6 +2028,43 @@ function singlesMatchResultsForPlayer(playerId){
   });
   return results.sort((a,b)=>a.date.localeCompare(b.date));
 }
+// "Índice de dominancia": combina el % de victorias con la diferencia de games,
+// en un solo número de 0 a 100. 70% del peso es el % de victorias, 30% la diferencia
+// de games (normalizada) — así un jugador que gana por paliza pesa más que uno que
+// gana raspando.
+function dominanceIndex(playerId){
+  let wins=0, losses=0, gamesFor=0, gamesAgainst=0;
+  state.tournaments.forEach(t=>{
+    if(!t.bracket) return;
+    t.bracket.flat().forEach(m=>{
+      if(!m.winner || !(m.p1===playerId || m.p2===playerId) || !m.sets) return;
+      let g1=0,g2=0;
+      m.sets.forEach(s=>{ g1+=Number(s[0])||0; g2+=Number(s[1])||0; });
+      const isP1 = m.p1===playerId;
+      gamesFor += isP1?g1:g2; gamesAgainst += isP1?g2:g1;
+      if(m.winner===playerId) wins++; else losses++;
+    });
+  });
+  (state.casualMatches||[]).forEach(m=>{
+    if(m.mode==='doubles') return;
+    const inA=(m.sideA||[]).includes(playerId), inB=(m.sideB||[]).includes(playerId);
+    if(!inA && !inB) return;
+    let gA=0,gB=0;
+    (m.sets||[]).forEach(s=>{ gA+=Number(s[0])||0; gB+=Number(s[1])||0; });
+    gamesFor += inA?gA:gB; gamesAgainst += inA?gB:gA;
+    const winner = matchWinnerSide(m);
+    if(!winner) return;
+    const won = (inA && winner==='A') || (inB && winner==='B');
+    if(won) wins++; else losses++;
+  });
+  const total = wins+losses;
+  if(total===0) return null;
+  const winPct = wins/total;
+  const totalGames = gamesFor+gamesAgainst;
+  const gameDiffNorm = totalGames>0 ? (gamesFor-gamesAgainst)/totalGames : 0;
+  const index = Math.max(0, Math.min(100, Math.round((winPct*70) + ((gameDiffNorm+1)/2*30))));
+  return { index, winPct: Math.round(winPct*100), gamesFor, gamesAgainst, matches: total };
+}
 // Racha actual: positiva = victorias seguidas, negativa = derrotas seguidas.
 function currentStreak(playerId){
   const results = singlesMatchResultsForPlayer(playerId);
@@ -2486,7 +2537,24 @@ function autoBadges(playerId){
   if(hasFiloDeNavaja(playerId) || hasFiloDeNavajaDoubles(playerId)){
     badges.push({ e:'🗡️', t:'Filo de Navaja' });
   }
+  if(hasGoldenStreak(playerId)){
+    badges.push({ e:'👑', t:'Racha de Oro — 3 torneos seguidos' });
+  }
   return badges;
+}
+// "Racha de Oro": ganar 3 torneos individuales seguidos (contando solo los torneos
+// en los que el jugador participó, en orden cronológico) — distinto de la racha de
+// partidos, esto es sobre títulos completos.
+function hasGoldenStreak(playerId){
+  const entered = state.tournaments
+    .filter(t=>t.status==='completed' && (t.participants||[]).includes(playerId) && t.date)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  let streak = 0;
+  for(const t of entered){
+    const won = (t.results && t.results.champion || []).includes(playerId);
+    if(won){ streak++; if(streak>=3) return true; } else { streak = 0; }
+  }
+  return false;
 }
 // Insignia de modo Sudden Death: el campeón de un torneo marcado como Sudden Death
 // que no perdió NINGÚN game en todo el torneo se lleva esta insignia especial.
@@ -2550,22 +2618,39 @@ function doublesRankingList(){
 
 // ---------- RENDER SHELL ----------
 const TABS = [
-  { id: 'profile', label: '👤 Mi Perfil' },
+  { id: 'profile', label: 'Mi Perfil' },
   {id:'ranking', label:'Ranking'},
-  {id:'challenges', label:'⚔️ Desafíos'},
+  {id:'challenges', label:'Desafíos'},
   {id:'tournaments', label:'Torneos'},
   {id:'players', label:'Jugadores'},
   {id:'achievements', label:'Logros'},
   {id:'finance', label:'Finanzas'},
   {id:'hall', label:'Salón de la fama'},
   {id:'stats', label:'Estadísticas'},
-  {id:'admin', label:'⚙️ Admin', adminOnly:true},
+  {id:'admin', label:'Admin', adminOnly:true},
 ];
-
+// Set de íconos propio y coherente (línea 1.5px, esquinas redondeadas) para reemplazar
+// la mezcla de emojis sueltos que había antes en la navegación principal.
+const TAB_ICONS = {
+  profile: '<circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c0-3.3 3-5.3 6.5-5.3s6.5 2 6.5 5.3"/>',
+  ranking: '<path d="M5 17V10M10 17V4M15 17v-7"/>',
+  challenges: '<path d="M3 3l6 6M17 3l-6 6M4 15l3 2 2-3M13 14l3 3 2-2"/><path d="M9 9l-6 8M11 9l6 8"/>',
+  tournaments: '<path d="M4 3h4v4a2 2 0 01-2 2 2 2 0 01-2-2V3zM12 3h4v4a2 2 0 01-2 2 2 2 0 01-2-2V3z"/><path d="M6 9v2a4 4 0 004 4 4 4 0 004-4V9M10 15v3M7 18h6"/>',
+  players: '<circle cx="7" cy="7" r="2.6"/><circle cx="14" cy="8" r="2.2"/><path d="M2.5 17c0-2.8 2.2-4.5 4.5-4.5s4.5 1.7 4.5 4.5M12.5 12.8c2 .1 3.7 1.6 3.7 4.2"/>',
+  achievements: '<circle cx="10" cy="8" r="4.2"/><path d="M7 11.5L6 18l4-2 4 2-1-6.5"/>',
+  finance: '<rect x="2.5" y="5.5" width="15" height="10" rx="2"/><path d="M2.5 8.5h15"/><circle cx="14" cy="12" r="1.3"/>',
+  hall: '<path d="M3 17h14M4 17V8l6-4 6 4v9M8 17v-5h4v5"/>',
+  stats: '<path d="M4 16V9M9.5 16V4M15 16v-6"/><path d="M2.5 16.5h15"/>',
+  admin: '<circle cx="10" cy="10" r="2.6"/><path d="M10 3v2M10 15v2M17 10h-2M5 10H3M14.9 5.1l-1.4 1.4M6.5 13.5l-1.4 1.4M14.9 14.9l-1.4-1.4M6.5 6.5L5.1 5.1"/>',
+};
+function tabIconSvg(id){
+  const paths = TAB_ICONS[id] || '';
+  return `<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+}
 function renderTabs(){
   const visible = TABS.filter(t => !t.adminOnly || state.isAdmin);
   document.getElementById('tabs').innerHTML = visible.map(t=>
-    `<button class="tab ${state.tab===t.id?'active':''}" onclick="AceApp.setTab('${t.id}')">${t.label}</button>`
+    `<button class="tab ${state.tab===t.id?'active':''}" onclick="AceApp.setTab('${t.id}')">${tabIconSvg(t.id)}<span>${t.label}</span></button>`
   ).join('');
 }
 
@@ -2736,6 +2821,7 @@ function nextMatchWidgetHtml(playerId){
   const losses = results.length - wins;
   const badges = autoBadges(state.myPlayerId) || [];
   const bestStreak = longestWinStreakEver(state.myPlayerId);
+  const dom = dominanceIndex(state.myPlayerId);
 
   const recentRows = results.slice(-8).reverse().map(r => `
     <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
@@ -2758,11 +2844,12 @@ function nextMatchWidgetHtml(playerId){
         </div>
       </div>
       ${rankProgressBarHtml(pts)}
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin:15px 0;background:var(--court);padding:10px;border-radius:8px;">
-        <div><strong style="color:var(--ball);font-size:18px;">${wins}</strong><div style="font-size:11px;color:var(--muted);">Victorias</div></div>
-        <div><strong style="color:var(--chalk);font-size:18px;">${losses}</strong><div style="font-size:11px;color:var(--muted);">Derrotas</div></div>
-        <div><strong style="color:var(--ball);font-size:18px;">${badges.length}</strong><div style="font-size:11px;color:var(--muted);">Logros</div></div>
-        <div><strong style="color:var(--ball);font-size:18px;">🔥${bestStreak}</strong><div style="font-size:11px;color:var(--muted);">Mejor racha</div></div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;margin:15px 0;background:var(--court);padding:10px;border-radius:8px;">
+        <div><strong style="color:var(--ball);font-size:18px;">${wins}</strong><div style="font-size:10.5px;color:var(--muted);">Victorias</div></div>
+        <div><strong style="color:var(--chalk);font-size:18px;">${losses}</strong><div style="font-size:10.5px;color:var(--muted);">Derrotas</div></div>
+        <div><strong style="color:var(--ball);font-size:18px;">${badges.length}</strong><div style="font-size:10.5px;color:var(--muted);">Logros</div></div>
+        <div><strong style="color:var(--ball);font-size:18px;">🔥${bestStreak}</strong><div style="font-size:10.5px;color:var(--muted);">Mejor racha</div></div>
+        <div title="Combina % de victorias y diferencia de games en un solo número"><strong style="color:var(--ball);font-size:18px;">${dom?dom.index:'—'}</strong><div style="font-size:10.5px;color:var(--muted);">Dominancia</div></div>
       </div>
       <h4 style="margin:12px 0 6px;color:var(--chalk);">Insignias</h4>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -2777,6 +2864,63 @@ function nextMatchWidgetHtml(playerId){
 }
 
 // ---------- VIEW: RANKING ----------
+// Curva comparativa entre dos jugadores en el tiempo: puntos acumulados de cada uno,
+// torneo tras torneo (no solo el total actual). Deja ver de un vistazo quién viene
+// creciendo más rápido, no solo quién va ganando ahora.
+function h2hEvolutionSvg(idA, idB){
+  const completed = [...state.tournaments].filter(t=>t.status==='completed').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(completed.length<2) return '';
+
+  const cumulative = { [idA]: 0, [idB]: 0 };
+  const seriesA = [0], seriesB = [0];
+
+  completed.forEach(t=>{
+    const mult = tierPointMultiplier(t.tier);
+    (t.bracket||[]).flat().forEach(m=>{
+      if(!m.sets || !m.p1 || !m.p2) return;
+      let g1=0, g2=0;
+      m.sets.forEach(s=>{ g1 += Number(s[0])||0; g2 += Number(s[1])||0; });
+      if(m.p1===idA) cumulative[idA] += Math.round(g1*mult*10)/10;
+      if(m.p2===idA) cumulative[idA] += Math.round(g2*mult*10)/10;
+      if(m.p1===idB) cumulative[idB] += Math.round(g1*mult*10)/10;
+      if(m.p2===idB) cumulative[idB] += Math.round(g2*mult*10)/10;
+    });
+    seriesA.push(cumulative[idA]);
+    seriesB.push(cumulative[idB]);
+  });
+
+  if(cumulative[idA]===0 && cumulative[idB]===0) return '';
+
+  const colorA = '#D4AF37', colorB = '#7EC8E3';
+  const steps = completed.length + 1;
+  const maxVal = Math.max(1, ...seriesA, ...seriesB);
+  const W = 640, H = 200, padL = 34, padB = 20, padT = 12, padR = 12;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xAt = (i) => padL + (plotW * i) / (steps-1);
+  const yAt = (v) => padT + plotH - (plotH * v) / maxVal;
+
+  const gridLines = [0, 0.5, 1].map(f => {
+    const y = padT + plotH * (1-f);
+    return `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(maxVal*f)}</text>`;
+  }).join('');
+
+  const lineFor = (series, color) => {
+    const pts = series.map((v,i)=> `${xAt(i)},${yAt(v)}`).join(' ');
+    const lastX = xAt(series.length-1), lastY = yAt(series[series.length-1]);
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lastX}" cy="${lastY}" r="3.5" fill="${color}"/>`;
+  };
+
+  return `<div class="card" style="margin:14px 0;">
+    <div class="tourn-meta" style="margin-bottom:8px;">📈 Evolución de puntos, torneo a torneo</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${gridLines}${lineFor(seriesA,colorA)}${lineFor(seriesB,colorB)}</svg>
+    <div style="margin-top:8px;display:flex;gap:16px;">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);"><span style="width:9px;height:9px;border-radius:50%;background:${colorA};display:inline-block;"></span>${esc(playerName(idA))}</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);"><span style="width:9px;height:9px;border-radius:50%;background:${colorB};display:inline-block;"></span>${esc(playerName(idB))}</span>
+    </div>
+  </div>`;
+}
 function rankingEvolutionSvg(){
   const completed = [...state.tournaments].filter(t=>t.status==='completed').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(completed.length<2 || state.players.length===0) return '';
@@ -3023,6 +3167,7 @@ function singlesTournamentsCardsHtml(){
         ${!isDone ? drawHtml(t, false) : ''}
         <div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
           <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', false)">📤 Compartir</button>
+          ${isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.generateChampionCertificateImage('${t.id}', false)">📜 Certificado de campeón</button>` : ''}
           ${tournamentIsPredictable(t) ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPredictionModal('${t.id}', false)">🎲 ${myPredictionFor(t.id)?'Editar mi quiniela':'Hacer quiniela'}</button>` : ''}
         </div>
         ${adminActions}
@@ -3030,6 +3175,94 @@ function singlesTournamentsCardsHtml(){
     </div>`;
   }).join('');
   return sortBar + cards;
+}
+// Certificado de campeón: documento elegante para imprimir, distinto de la tarjeta
+// digital — fondo claro (ahorra tinta), marco ornamental, pensado para regalar/colgar.
+async function generateChampionCertificateImage(tid, isDoubles){
+  await ensureFontsReady();
+  const list = isDoubles ? state.doubles : state.tournaments;
+  const t = list.find(x=>x.id===tid);
+  if(!t || t.status!=='completed' || !(t.results && t.results.champion || []).length){
+    aceAlert('Este torneo todavía no tiene campeón definido.');
+    return;
+  }
+  const tier = tierOf(t.tier);
+  const champName = isDoubles
+    ? (t.pairs[(t.results.champion||[])[0]]||[]).map(playerName).join(' / ')
+    : (t.results.champion||[]).map(playerName).join(', ');
+
+  const W = 1600, H = 1131;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#F7F3E8';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = '#B5502E';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(40,40,W-80,H-80);
+  ctx.strokeStyle = '#D4AF37';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(58,58,W-116,H-116);
+
+  ctx.textAlign = 'center';
+
+  ctx.fillStyle = '#8C3D22';
+  ctx.font = '20px sans-serif';
+  ctx.fillText('VALLE GRANDE TOUR · LIGA DE TENIS AMATEUR', W/2, 140);
+
+  ctx.fillStyle = '#14120A';
+  ctx.font = 'bold 72px "Bebas Neue", sans-serif';
+  ctx.fillText('CERTIFICADO DE CAMPEÓN', W/2, 220);
+
+  ctx.strokeStyle = '#D4AF37';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W/2-140, 250); ctx.lineTo(W/2+140, 250);
+  ctx.stroke();
+
+  const medX = W/2, medY = 340;
+  ctx.beginPath();
+  ctx.arc(medX, medY, 46, 0, Math.PI*2);
+  ctx.fillStyle = '#D4AF37';
+  ctx.fill();
+  ctx.strokeStyle = '#8C3D22';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.font = '46px sans-serif';
+  ctx.fillStyle = '#14120A';
+  ctx.fillText('🏆', medX, medY+16);
+
+  ctx.font = '26px sans-serif';
+  ctx.fillStyle = '#4a4638';
+  ctx.fillText('Se otorga el presente certificado a', W/2, 440);
+
+  ctx.font = 'bold 88px "Bebas Neue", sans-serif';
+  ctx.fillStyle = '#B5502E';
+  ctx.fillText(truncateCanvasText(ctx, champName.toUpperCase(), W-300), W/2, 540);
+
+  ctx.font = '24px sans-serif';
+  ctx.fillStyle = '#4a4638';
+  ctx.fillText(`por consagrarse Campeón de ${t.name}`, W/2, 610);
+  ctx.font = '20px sans-serif';
+  ctx.fillStyle = '#75705f';
+  ctx.fillText(`Categoría ${tier?tier.label:''}${t.date?' · '+t.date:''}`, W/2, 645);
+
+  ctx.strokeStyle = '#75705f';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(W/2-180, 900); ctx.lineTo(W/2+180, 900);
+  ctx.stroke();
+  ctx.font = '18px sans-serif';
+  ctx.fillStyle = '#4a4638';
+  ctx.fillText('Organización · Valle Grande Tour', W/2, 928);
+
+  ctx.font = '15px sans-serif';
+  ctx.fillStyle = '#9b9583';
+  ctx.fillText(`Emitido el ${new Date().toLocaleDateString('es-CL')}`, W/2, H-70);
+
+  showCardPreviewModal(canvas, `certificado-${champName.replace(/\s+/g,'-')}.png`, 'Certificado de campeón');
 }
 function podiumHtml(t, isDoubles){
   const nameOf = isDoubles ? (idx=> (t.pairs[idx]||[]).map(playerName).join(' / ')) : (pid=>playerName(pid));
@@ -3190,6 +3423,7 @@ function doublesTournamentsCardsHtml(){
           ${!isDone ? drawHtml(t, true) : ''}
           <div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
             <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', true)">📤 Compartir</button>
+            ${isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.generateChampionCertificateImage('${t.id}', true)">📜 Certificado de campeón</button>` : ''}
             ${tournamentIsPredictable(t) ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPredictionModal('${t.id}', true)">🎲 ${myPredictionFor(t.id)?'Editar mi quiniela':'Hacer quiniela'}</button>` : ''}
           </div>
           ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
@@ -3733,6 +3967,17 @@ function viewAchievements(){
       <div class="award-desc">${esc(a.desc)}</div>
     </div>`).join('')}
   </div>` : '';
+  // Rareza de cada insignia: % del circuito que la tiene, para darle prestigio real
+  // a las más difíciles de conseguir.
+  const badgeRarity = {};
+  const totalPlayersForRarity = state.players.length || 1;
+  state.players.forEach(p=>{
+    autoBadges(p.id).forEach(b=>{ badgeRarity[b.t] = (badgeRarity[b.t]||0) + 1; });
+  });
+  const rarityLabel = (title) => {
+    const pct = Math.round(((badgeRarity[title]||0) / totalPlayersForRarity) * 100);
+    return `<span style="opacity:0.6;font-size:10px;margin-left:3px;">· ${pct}% del circuito</span>`;
+  };
   const autoSection = state.players.map(p=>{
     const badges = autoBadges(p.id);
     if(badges.length===0) return '';
@@ -3741,7 +3986,7 @@ function viewAchievements(){
         ${playerAvatarHtml(p,34)}<strong>${esc(p.name)}</strong>
       </div>
       <div class="player-badges" style="justify-content:flex-start;">
-        ${badges.map(b=>`<span class="stat-pill"><span class="badge-emoji">${b.e}</span> ${b.t}</span>`).join('')}
+        ${badges.map(b=>`<span class="stat-pill"><span class="badge-emoji">${b.e}</span> ${b.t}${rarityLabel(b.t)}</span>`).join('')}
       </div>
     </div>`;
   }).join('');
@@ -5252,7 +5497,7 @@ function showH2H(){
   const barsHtml = h2hStatBarsHtml(pA, pB, rec);
 
   if (rec.matches.length === 0) {
-    el.innerHTML = radarHtml + barsHtml + `<div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">📸 Compartir tarjeta versus</button></div><div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
+    el.innerHTML = radarHtml + barsHtml + h2hEvolutionSvg(idA, idB) + `<div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">📸 Compartir tarjeta versus</button></div><div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
     return;
   }
 
@@ -5261,6 +5506,7 @@ function showH2H(){
   el.innerHTML = `
     ${radarHtml}
     ${barsHtml}
+    ${h2hEvolutionSvg(idA, idB)}
     <div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">📸 Compartir tarjeta versus</button></div>
     <div class="podium">${rows}</div>`;
 }
@@ -7314,6 +7560,7 @@ window.AceApp.generatePlayerCardImage = generatePlayerCardImage;
 window.AceApp.generateRankingCardImage = generateRankingCardImage;
 window.AceApp.generateVersusCardImage = generateVersusCardImage;
 window.AceApp.generateBracketCardImage = generateBracketCardImage;
+window.AceApp.generateChampionCertificateImage = generateChampionCertificateImage;
 window.AceApp.adjustScore = adjustScore;
   bootApp();
 })();
