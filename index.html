@@ -658,6 +658,13 @@
 #ace-app .rank-trend.flat { color:var(--muted); }
 #ace-app .rank-streak { font-size:11px; margin-left:6px; }
 #ace-app .rank-expiry-warn { font-size:10.5px; color:#D8A34C; display:block; margin-top:2px; }
+/* Movimiento de posición (flecha junto al número de ranking) y puntos ganados en
+   el último torneo, estilo tabla ATP. */
+#ace-app .rank-pos { display:flex; flex-direction:column; align-items:center; gap:1px; }
+#ace-app .rank-pos-delta { font-size:10px; font-weight:700; font-family:'Work Sans'; }
+#ace-app .rank-pos-delta.up { color:#6C8B76; }
+#ace-app .rank-pos-delta.down { color:#B5502E; }
+#ace-app .rank-last-pts { font-size:10.5px; font-weight:700; color:#6C8B76; margin-left:3px; }
 #ace-app .rank-actions { display:flex; align-items:center; gap:8px; justify-self:end; }
 #ace-app .rank-h2h-btn { flex-shrink:0; }
 /* Partidos en vivo */
@@ -1766,12 +1773,17 @@ function isPointsExpired(dateStr){
 let TIER_POINT_MULTIPLIER = { '250': 1, '500': 1.5, 'masters': 2, 'slam': 2.5 };
 // Los partidos libres valen mucho menos que un torneo oficial (aunque sea el más chico).
 const CASUAL_MATCH_MULTIPLIER = 0.2;
+// Punto fijo por participar en una ronda de torneo (independiente de cuántos games
+// se ganen). Solo aplica a torneos con cuadro — los partidos libres no tienen "rondas".
+const PARTICIPATION_POINT_PER_ROUND = 1;
 function tierPointMultiplier(tierId){
   return TIER_POINT_MULTIPLIER[tierId] != null ? TIER_POINT_MULTIPLIER[tierId] : 1;
 }
 function singlesPointEvents() {
   const events = [];
   // 1. Games de Torneos Individuales (multiplicados por la categoría del torneo)
+  //    + 1 punto fijo por ronda jugada (participación), para que sumar algo no
+  //    dependa solo de ganar games — incentiva seguir jugando aunque pierdas feo.
   state.tournaments.forEach(t => {
     const mult = tierPointMultiplier(t.tier);
     if (t.bracket) {
@@ -1779,8 +1791,8 @@ function singlesPointEvents() {
         if (m.sets && m.p1 && m.p2) {
           let g1 = 0, g2 = 0;
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
-          events.push({ playerId: m.p1, points: Math.round(g1*mult*10)/10, date: t.date, label: t.name });
-          events.push({ playerId: m.p2, points: Math.round(g2*mult*10)/10, date: t.date, label: t.name });
+          events.push({ playerId: m.p1, points: Math.round(g1*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND, date: t.date, label: t.name });
+          events.push({ playerId: m.p2, points: Math.round(g2*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND, date: t.date, label: t.name });
         }
       });
     }
@@ -1817,8 +1829,8 @@ function doublesPointEvents() {
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
           const pair1 = t.pairs[Number(m.p1)] || [];
           const pair2 = t.pairs[Number(m.p2)] || [];
-          pair1.forEach(pid => events.push({ playerId: pid, points: Math.round(g1*mult*10)/10, date: t.date, label: t.name }));
-          pair2.forEach(pid => events.push({ playerId: pid, points: Math.round(g2*mult*10)/10, date: t.date, label: t.name }));
+          pair1.forEach(pid => events.push({ playerId: pid, points: Math.round(g1*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND, date: t.date, label: t.name }));
+          pair2.forEach(pid => events.push({ playerId: pid, points: Math.round(g2*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND, date: t.date, label: t.name }));
         }
       });
     }
@@ -2887,10 +2899,10 @@ function h2hEvolutionSvg(idA, idB){
       if(!m.sets || !m.p1 || !m.p2) return;
       let g1=0, g2=0;
       m.sets.forEach(s=>{ g1 += Number(s[0])||0; g2 += Number(s[1])||0; });
-      if(m.p1===idA) cumulative[idA] += Math.round(g1*mult*10)/10;
-      if(m.p2===idA) cumulative[idA] += Math.round(g2*mult*10)/10;
-      if(m.p1===idB) cumulative[idB] += Math.round(g1*mult*10)/10;
-      if(m.p2===idB) cumulative[idB] += Math.round(g2*mult*10)/10;
+      if(m.p1===idA) cumulative[idA] += Math.round(g1*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
+      if(m.p2===idA) cumulative[idA] += Math.round(g2*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
+      if(m.p1===idB) cumulative[idB] += Math.round(g1*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
+      if(m.p2===idB) cumulative[idB] += Math.round(g2*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
     });
     seriesA.push(cumulative[idA]);
     seriesB.push(cumulative[idB]);
@@ -2938,14 +2950,15 @@ function rankingEvolutionSvg(){
   state.players.forEach(p=> series[p.id]=[0]);
 
   completed.forEach(t=>{
-    // Mismo cálculo que el ranking real: games ganados × multiplicador de la categoría.
+    // Mismo cálculo que el ranking real: games ganados × multiplicador de la categoría,
+    // más el punto fijo de participación por ronda jugada.
     const mult = tierPointMultiplier(t.tier);
     (t.bracket||[]).flat().forEach(m=>{
       if(!m.sets || !m.p1 || !m.p2) return;
       let g1=0, g2=0;
       m.sets.forEach(s=>{ g1 += Number(s[0])||0; g2 += Number(s[1])||0; });
-      if(cumulative[m.p1]!==undefined) cumulative[m.p1] += Math.round(g1*mult*10)/10;
-      if(cumulative[m.p2]!==undefined) cumulative[m.p2] += Math.round(g2*mult*10)/10;
+      if(cumulative[m.p1]!==undefined) cumulative[m.p1] += Math.round(g1*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
+      if(cumulative[m.p2]!==undefined) cumulative[m.p2] += Math.round(g2*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
     });
     state.players.forEach(p=> series[p.id].push(cumulative[p.id]||0));
   });
@@ -3036,6 +3049,49 @@ function setRankingSubTab(mode) {
   render();
 }
 
+// Calcula, para cada jugador, cuántas posiciones subió/bajó y cuántos puntos ganó
+// específicamente en el último torneo jugado en el circuito (no un promedio de 30
+// días como recentPointsTrend, sino el evento más reciente en sí, tipo tabla ATP).
+function rankingWithMovement(isDoubles){
+  const rankList = isDoubles ? doublesRankingList() : singlesRankingList();
+  const tournamentsList = isDoubles ? state.doubles : state.tournaments;
+  const completed = tournamentsList.filter(t=>t.status==='completed' && t.date).sort((a,b)=>a.date.localeCompare(b.date));
+  const byId = {};
+  rankList.forEach(r=> byId[r.id] = { posDelta: 0, lastPts: 0 });
+  if(completed.length===0) return byId;
+
+  const lastT = completed[completed.length-1];
+  const events = isDoubles ? doublesPointEvents() : singlesPointEvents();
+  const lastContribution = {};
+  events.forEach(e=>{
+    if(e.date === lastT.date && e.label === lastT.name){
+      lastContribution[e.playerId] = (lastContribution[e.playerId]||0) + e.points;
+    }
+  });
+
+  const beforeList = rankList.map(r => ({ id: r.id, points: r.points - (lastContribution[r.id] || 0) }))
+    .sort((a,b)=>b.points-a.points);
+  const beforeRanked = withTiedRanks(beforeList);
+  const beforeRankById = {};
+  beforeRanked.forEach(r=> beforeRankById[r.id] = r.rank);
+
+  rankList.forEach(r=>{
+    byId[r.id] = {
+      posDelta: (beforeRankById[r.id] || r.rank) - r.rank, // positivo = subió posiciones
+      lastPts: lastContribution[r.id] || 0,
+    };
+  });
+  return byId;
+}
+function posDeltaHtml(delta){
+  if(delta > 0) return `<span class="rank-pos-delta up">▲${delta}</span>`;
+  if(delta < 0) return `<span class="rank-pos-delta down">▼${Math.abs(delta)}</span>`;
+  return '';
+}
+function lastPtsHtml(pts){
+  if(pts > 0.05) return `<span class="rank-last-pts">+${fmtPts(pts)}</span>`;
+  return '';
+}
 function viewRanking(){
   const subTab = state.rankingSubTab || 'singles';
 
@@ -3065,16 +3121,18 @@ function viewRanking(){
     `;
   }
 
+  const movement = rankingWithMovement(false);
   const rows = list.map((r, i) => {
     const p = playerById(r.id);
     const topClass = r.rank === 1 ? 'top1' : (r.rank === 2 ? 'top2' : (r.rank === 3 ? 'top3' : ''));
     const trend = recentPointsTrend(r.id, false);
     const streak = currentStreak(r.id);
     const expiring = pointsExpiringSoon(r.id, false);
+    const mv = movement[r.id] || { posDelta: 0, lastPts: 0 };
 
     return `
       <div class="rank-row ${topClass}">
-        <div class="rank-pos">${r.rank}</div>
+        <div class="rank-pos">${r.rank}${posDeltaHtml(mv.posDelta)}</div>
         <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
           ${playerAvatarWithFireHtml(p, 46, streak)}
           <div class="rank-name-block">
@@ -3085,7 +3143,7 @@ function viewRanking(){
         </div>
         <div class="rank-actions">
           <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">⚔️</button>
-          <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span><span class="lbl">pts</span></div>
+          <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span>${lastPtsHtml(mv.lastPts)}<span class="lbl">pts</span></div>
         </div>
       </div>
     `;
@@ -3447,18 +3505,20 @@ function doublesTournamentsCardsHtml(){
 }
 function viewDoubles(){
   const rankList = doublesRankingList();
+  const movementD = rankingWithMovement(true);
   const rankHtml = rankList.length ? rankList.map((r,i)=>{
     const p = playerById(r.id);
+    const mv = movementD[r.id] || { posDelta: 0, lastPts: 0 };
     return `
     <div class="rank-row ${r.rank===1?'top1':''}">
-      <div class="rank-pos">${r.rank}</div>
+      <div class="rank-pos">${r.rank}${posDeltaHtml(mv.posDelta)}</div>
       ${playerAvatarHtml(p,46)}
       <div class="rank-name-block">
         <span class="rank-name">${esc(r.name)}${p&&p.alias?` <span style="color:var(--ball);font-weight:400;font-style:italic;">"${esc(p.alias)}"</span>`:''} ${trendBadgeHtml(recentPointsTrend(r.id, true))}</span>
         <span class="rank-meta">Ranking de dobles</span>
         ${(()=>{ const exp = pointsExpiringSoon(r.id, true); return exp ? `<span class="rank-expiry-warn">⚠️ ${exp.points} pts vencen el ${exp.expiryDate.toLocaleDateString('es-CL')}</span>` : ''; })()}
       </div>
-      <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span><span class="lbl">pts</span></div>
+      <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span>${lastPtsHtml(mv.lastPts)}<span class="lbl">pts</span></div>
     </div>`;
   }).join('') : `<div class="empty">Sin puntos de dobles todavía.</div>`;
 
