@@ -1771,27 +1771,27 @@ function tierPointMultiplier(tierId){
 }
 function singlesPointEvents() {
   const events = [];
-  // 1. Games de Torneos Individuales
+  // 1. Games de Torneos Individuales (multiplicados por la categoría del torneo)
   state.tournaments.forEach(t => {
+    const mult = tierPointMultiplier(t.tier);
     if (t.bracket) {
       t.bracket.flat().forEach(m => {
-        // Exigimos sets.length > 0 para confirmar que el partido se jugó
-        if (m.sets && m.sets.length > 0 && m.p1 && m.p2) {
-          let g1 = 1, g2 = 1; // +1 punto base por jugar la ronda
+        if (m.sets && m.p1 && m.p2) {
+          let g1 = 0, g2 = 0;
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
-          events.push({ playerId: m.p1, points: g1, date: t.date, label: t.name });
-          events.push({ playerId: m.p2, points: g2, date: t.date, label: t.name });
+          events.push({ playerId: m.p1, points: Math.round(g1*mult*10)/10, date: t.date, label: t.name });
+          events.push({ playerId: m.p2, points: Math.round(g2*mult*10)/10, date: t.date, label: t.name });
         }
       });
     }
   });
-  // 2. Games de Partidos Libres en modalidad SINGLES
+  // 2. Games de Partidos Libres en modalidad SINGLES (valen mucho menos que un torneo oficial)
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'singles' || !m.mode) {
-      let gA = 0, gB = 0; // Los libres no dan bono de participación
+      let gA = 0, gB = 0;
       (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
-      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: gA, date: m.date, label: 'Partido libre' }));
-      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: gB, date: m.date, label: 'Partido libre' }));
+      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gA*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
+      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gB*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
     }
   });
   return events;
@@ -1807,28 +1807,29 @@ function singlesPointsByPlayer() {
 
 function doublesPointEvents() {
   const events = [];
-  // 1. Games de Torneos de Dobles
+  // 1. Games de Torneos de Dobles (multiplicados por la categoría del torneo)
   state.doubles.forEach(t => {
+    const mult = tierPointMultiplier(t.tier);
     if (t.bracket) {
       t.bracket.flat().forEach(m => {
-        if (m.sets && m.sets.length > 0 && m.p1 != null && m.p2 != null) {
-          let g1 = 1, g2 = 1; // +1 punto base por jugar la ronda
+        if (m.sets && m.p1 && m.p2) {
+          let g1 = 0, g2 = 0;
           m.sets.forEach(s => { g1 += Number(s[0]) || 0; g2 += Number(s[1]) || 0; });
           const pair1 = t.pairs[Number(m.p1)] || [];
           const pair2 = t.pairs[Number(m.p2)] || [];
-          pair1.forEach(pid => events.push({ playerId: pid, points: g1, date: t.date, label: t.name }));
-          pair2.forEach(pid => events.push({ playerId: pid, points: g2, date: t.date, label: t.name }));
+          pair1.forEach(pid => events.push({ playerId: pid, points: Math.round(g1*mult*10)/10, date: t.date, label: t.name }));
+          pair2.forEach(pid => events.push({ playerId: pid, points: Math.round(g2*mult*10)/10, date: t.date, label: t.name }));
         }
       });
     }
   });
-  // 2. Games de Partidos Libres en modalidad DOBLES
+  // 2. Games de Partidos Libres en modalidad DOBLES (valen mucho menos que un torneo oficial)
   (state.casualMatches || []).forEach(m => {
     if (m.mode === 'doubles') {
       let gA = 0, gB = 0;
       (m.sets || []).forEach(s => { gA += Number(s[0]) || 0; gB += Number(s[1]) || 0; });
-      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: gA, date: m.date, label: 'Partido libre' }));
-      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: gB, date: m.date, label: 'Partido libre' }));
+      (m.sideA || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gA*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
+      (m.sideB || []).forEach(pid => events.push({ playerId: pid, points: Math.round(gB*CASUAL_MATCH_MULTIPLIER*10)/10, date: m.date, label: 'Partido libre' }));
     }
   });
   return events;
@@ -1843,6 +1844,7 @@ function doublesPointsByPlayer() {
 }
 
 // Puntos totales acumulados por PAREJA (no por jugador individual), jugando juntos.
+// Se usa para el GOAT de Dobles: la pareja con más puntos sumados jugando en equipo.
 function doublesPointsByPairMap(){
   const pts = {};
   const add = (ids, points, date) => {
@@ -1853,8 +1855,8 @@ function doublesPointsByPairMap(){
   state.doubles.forEach(t=>{
     if(t.bracket){
       t.bracket.flat().forEach(m=>{
-        if(m.sets && m.sets.length > 0 && m.p1!=null && m.p2!=null){
-          let g1=1, g2=1; // +1 para mantener consistencia con el ranking individual de dobles
+        if(m.sets && m.p1!=null && m.p2!=null){
+          let g1=0, g2=0;
           m.sets.forEach(s=>{ g1 += Number(s[0])||0; g2 += Number(s[1])||0; });
           add(t.pairs[Number(m.p1)]||[], g1, t.date);
           add(t.pairs[Number(m.p2)]||[], g2, t.date);
