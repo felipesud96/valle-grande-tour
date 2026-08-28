@@ -51,6 +51,21 @@
   transition: background 0.4s ease;
 }
 
+/* ---------- SCROLLBAR PERSONALIZADO (punto 4) ---------- */
+#ace-app { scrollbar-width: thin; scrollbar-color: var(--clay) var(--court-2); }
+#ace-app *::-webkit-scrollbar { width: 8px; height: 8px; }
+#ace-app *::-webkit-scrollbar-track { background: var(--court-2); }
+#ace-app *::-webkit-scrollbar-thumb { background: var(--clay); border-radius: 8px; }
+#ace-app *::-webkit-scrollbar-thumb:hover { background: var(--ball); }
+
+/* ---------- ESTADOS DE FOCO VISIBLES (punto 5) ---------- */
+#ace-app *:focus-visible {
+  outline: 2px solid var(--ball); outline-offset: 2px; border-radius: 4px;
+}
+#ace-app input:focus-visible, #ace-app select:focus-visible, #ace-app textarea:focus-visible {
+  outline: 2px solid var(--ball); outline-offset: 1px;
+}
+
 /* ---------- MODO SUPERFICIE (temas de cancha) ---------- */
 #ace-app[data-surface="grass"] {
   --clay: #3A7D33;
@@ -70,6 +85,21 @@
   --court-2: #101722;
   --court-3: #17202E;
 }
+/* ---------- MODO CLARO (punto 20) — se combina con cualquier superficie: solo
+   cambia fondos/texto, deja los colores de acento (arcilla/pelota) tal cual. ---------- */
+#ace-app[data-theme="light"] {
+  --court: #F7F3E8;
+  --court-2: #FFFFFF;
+  --court-3: #ECE5D3;
+  --chalk: #201D14;
+  --muted: #6B6656;
+  --line: rgba(20,18,10,0.14);
+}
+/* El video del logo usa mix-blend-mode:screen para que el negro se funda con el
+   fondo oscuro — sobre fondo claro eso lo lavaría por completo, así que en modo
+   claro se muestra normal, dentro de un recuadro oscuro (como una placa/insignia). */
+#ace-app[data-theme="light"] .brand-mark { background: #0A0A0A; border-radius: 10px; }
+#ace-app[data-theme="light"] .brand-video { mix-blend-mode: normal; }
 
 #ace-app * { box-sizing: border-box; }
 
@@ -205,13 +235,13 @@
   transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
 }
 #ace-app .btn:active:not(:disabled) { transform: scale(0.96); filter: brightness(0.92); box-shadow: inset 0 1px 3px rgba(0,0,0,0.35); }
-#ace-app .btn-primary { background: var(--clay); color: var(--chalk); }
-#ace-app .btn-primary:hover { background: var(--clay-light); }
-#ace-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--chalk); }
+#ace-app .btn-primary { background: var(--clay); color: var(--chalk); font-weight: 700; box-shadow: 0 2px 8px rgba(181,80,46,0.35); }
+#ace-app .btn-primary:hover { background: var(--clay-light); box-shadow: 0 3px 10px rgba(181,80,46,0.45); }
+#ace-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 600; }
 #ace-app .btn-ghost:hover { border-color: var(--ball); color: var(--ball); }
-#ace-app .btn-ball { background: var(--ball); color: var(--ink); }
+#ace-app .btn-ball { background: var(--ball); color: var(--ink); font-weight: 700; box-shadow: 0 2px 8px rgba(212,175,55,0.35); }
 #ace-app .btn-sm { padding: 6px 11px; font-size: 12px; }
-#ace-app .btn-danger { background: transparent; color: #E08A6E; border-color: rgba(224,138,110,0.4);}
+#ace-app .btn-danger { background: transparent; color: #E08A6E; border-color: rgba(224,138,110,0.4); font-weight: 600;}
 
 /* ---------- RANKING ---------- */
 #ace-app .rank-table { display: flex; flex-direction: column; gap: 8px; }
@@ -441,7 +471,7 @@
 
 #ace-app .overlay {
   position: fixed; inset: 0; background: rgba(10,20,14,0.72); display:flex; align-items:center; justify-content:center;
-  z-index: 999; padding: 16px; backdrop-filter: blur(2px);
+  z-index: 999; padding: 16px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
 #ace-app .modal {
   background: var(--court-2); border: 1px solid var(--line); border-radius: 14px; padding: 22px;
@@ -728,8 +758,10 @@
       </div>
       <div id="identity-chip"></div>
       <div id="admin-chip"></div>
-      <button class="btn btn-ghost btn-sm" id="pwa-install-btn" onclick="AceApp.installPwa()" style="display:none;" title="Instalar la app en tu dispositivo" aria-label="Instalar app">📲 Instalar app</button>
+      <button class="btn btn-ghost btn-sm" id="pwa-install-btn" onclick="AceApp.installPwa()" style="display:none;" title="Instalar la app en tu dispositivo" aria-label="Instalar app"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 16h12"/></svg> Instalar app</button>
       <button class="btn btn-ghost btn-sm" onclick="AceApp.toggleTextSize()" title="Cambiar tamaño de texto" aria-label="Cambiar tamaño de texto">🔤 Tamaño de texto</button>
+      <button class="btn btn-ghost btn-sm" id="density-toggle-btn" onclick="AceApp.toggleDensity()" title="Vista compacta o cómoda" aria-label="Cambiar densidad de lista"></button>
+      <button class="btn btn-ghost btn-sm" id="theme-toggle-btn" onclick="AceApp.toggleLightMode()" title="Modo claro u oscuro" aria-label="Cambiar modo claro u oscuro"></button>
       <button class="btn btn-ghost btn-sm" id="surface-toggle-btn" onclick="AceApp.cycleSurface()" title="Cambiar superficie de cancha" aria-label="Cambiar superficie de cancha"></button>
       <button class="btn btn-ghost btn-sm" id="sound-toggle-btn" onclick="AceApp.toggleSounds()" title="Activar o silenciar sonidos" aria-label="Activar o silenciar sonidos"></button>
       <input type="file" id="restore-file-input" accept="application/json" style="display:none;" onchange="AceApp.handleRestoreFile(event)">
@@ -983,7 +1015,7 @@ const RANK_TIERS = [
 function fmtPts(n){
   n = Number(n) || 0;
   const rounded = Math.round(n * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return rounded.toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 function rankTierInfo(points){
   points = points || 0;
@@ -1616,7 +1648,7 @@ const SUGGESTED_ACHIEVEMENTS = [
   { e:'🌅', t:'Madrugador', d:'El que siempre llega primero a calentar.' },
 ];
 
-let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {}, achSubTab: null, achCategory: 'all', achSearch: '', surface: 'clay', soundsOn: true, predictions: [], tournamentsSubTab: 'singles' };
+let state = { players: [], tournaments: [], doubles: [], achievements: [], expenses: [], myPlayerId: null, isAdmin: false, matchRules: {format:'single', gamesPerSet:3}, tab: 'ranking', loaded: false, playerSearch: '', tournamentSort: 'date-desc', liveMatches: {}, achSubTab: null, achCategory: 'all', achSearch: '', surface: 'clay', soundsOn: true, predictions: [], tournamentsSubTab: 'singles', density: 'comfortable', lightMode: false };
 let tempPhoto = null; // holds base64 during player modal session
 let tempLinkAsMe = false; // whether the player modal in progress should self-link on save
 
@@ -1734,6 +1766,8 @@ async function loadAll(){
   }
   state.surface = await safeGet('surface-theme', 'clay', false);
   state.soundsOn = await safeGet('sounds-on', true, false);
+  state.density = await safeGet('list-density', 'comfortable', false);
+  state.lightMode = await safeGet('light-mode', false, false);
   applySurfaceTheme();
   state.loaded = true;
 }
@@ -2673,6 +2707,22 @@ function tabIconSvg(id){
   const paths = TAB_ICONS[id] || '';
   return `<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 }
+// Set de íconos para las acciones más comunes/repetidas de la app (punto 2), del
+// mismo estilo que los de la navegación — reemplazan los emojis sueltos en botones.
+const ACTION_ICONS = {
+  share: '<circle cx="15" cy="4.5" r="2.2"/><circle cx="5" cy="10" r="2.2"/><circle cx="15" cy="15.5" r="2.2"/><path d="M7 8.8l6-3M7 11.2l6 3"/>',
+  shuffle: '<path d="M2 5h3l8 10h4M2 15h3l3-3.8M14 5h4M15.5 3l2.5 2-2.5 2M15.5 17l2.5-2-2.5-2"/>',
+  add: '<path d="M10 4v12M4 10h12"/>',
+  certificate: '<circle cx="10" cy="7" r="4.2"/><path d="M7 10.5L6 17l4-2 4 2-1-6.5"/>',
+  retry: '<path d="M16 10a6 6 0 11-2-4.5"/><path d="M16 3v4h-4"/>',
+  install: '<path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 16h12"/>',
+  download: '<path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 16.5h12"/>',
+  upload: '<path d="M10 16V6M6 10l4-4 4 4"/><path d="M4 16.5h12"/>',
+};
+function actionIconSvg(name){
+  const paths = ACTION_ICONS[name] || '';
+  return `<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;">${paths}</svg>`;
+}
 function renderTabs(){
   const visible = TABS.filter(t => !t.adminOnly || state.isAdmin);
   document.getElementById('tabs').innerHTML = visible.map(t=>
@@ -2851,7 +2901,7 @@ function nextMatchWidgetHtml(playerId){
 
   const recentRows = results.slice(-8).reverse().map(r => `
     <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
-      <span>${r.date} · ${esc(r.label)}</span>
+      <span>${fmtDate(r.date)} · ${esc(r.label)}</span>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✔ Victoria':'❌ Derrota'}</span>
         ${r.matchId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${r.matchId}')">📲 Tarjeta</button>` : ''}
@@ -3229,7 +3279,7 @@ function singlesTournamentsCardsHtml(){
         <div>
           <span class="tier-badge" style="background:${tier.color}">${tier.short}</span>
           <div class="tourn-title">${esc(t.name)}</div>
-          <div class="tourn-meta">${t.date||'Sin fecha'} · ${(t.participants||[]).length} jugador(es) · <span class="status-pill ${isDone?'status-done':'status-open'}">${isDone?'Finalizado':'En curso'}</span></div>
+          <div class="tourn-meta">${t.date?fmtDate(t.date):'Sin fecha'} · ${(t.participants||[]).length} jugador(es) · <span class="status-pill ${isDone?'status-done':'status-open'}">${isDone?'Finalizado':'En curso'}</span></div>
         </div>
         <div class="tourn-fee">
           <span class="amt">${fmtMoney(tier.fee)}</span>
@@ -3240,8 +3290,8 @@ function singlesTournamentsCardsHtml(){
         ${isDone ? podium : `<div>${participantsHtml || '<span class="tourn-meta">Sin inscritos aún.</span>'}</div>`}
         ${!isDone ? drawHtml(t, false) : ''}
         <div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
-          <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', false)">📤 Compartir</button>
-          ${isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.generateChampionCertificateImage('${t.id}', false)">📜 Certificado de campeón</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', false)">${actionIconSvg('share')} Compartir</button>
+          ${isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.generateChampionCertificateImage('${t.id}', false)">${actionIconSvg('certificate')} Certificado de campeón</button>` : ''}
           ${tournamentIsPredictable(t) ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPredictionModal('${t.id}', false)">🎲 ${myPredictionFor(t.id)?'Editar mi quiniela':'Hacer quiniela'}</button>` : ''}
         </div>
         ${adminActions}
@@ -3488,7 +3538,7 @@ function doublesTournamentsCardsHtml(){
           <div>
             <span class="tier-badge" style="background:${tier.color}">${tier.short}</span>
             <div class="tourn-title">${esc(t.name)}</div>
-            <div class="tourn-meta">${t.date||'Sin fecha'} · ${(t.pairs||[]).length} pareja(s) · <span class="status-pill ${isDone?'status-done':'status-open'}">${isDone?'Finalizado':'En curso'}</span></div>
+            <div class="tourn-meta">${t.date?fmtDate(t.date):'Sin fecha'} · ${(t.pairs||[]).length} pareja(s) · <span class="status-pill ${isDone?'status-done':'status-open'}">${isDone?'Finalizado':'En curso'}</span></div>
           </div>
           <div class="tourn-fee"><span class="amt">${fmtMoney(tier.fee)}</span><div class="tourn-meta">cuota por pareja</div></div>
         </div>
@@ -3496,8 +3546,8 @@ function doublesTournamentsCardsHtml(){
           ${isDone ? podiumHtml(t, true) : `<div>${pairsHtml || '<span class="tourn-meta">Sin parejas aún.</span>'}</div>`}
           ${!isDone ? drawHtml(t, true) : ''}
           <div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', true)">📤 Compartir</button>
-            ${isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.generateChampionCertificateImage('${t.id}', true)">📜 Certificado de campeón</button>` : ''}
+            <button class="btn btn-ghost btn-sm" onclick="AceApp.shareTournament('${t.id}', true)">${actionIconSvg('share')} Compartir</button>
+            ${isDone ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.generateChampionCertificateImage('${t.id}', true)">${actionIconSvg('certificate')} Certificado de campeón</button>` : ''}
             ${tournamentIsPredictable(t) ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPredictionModal('${t.id}', true)">🎲 ${myPredictionFor(t.id)?'Editar mi quiniela':'Hacer quiniela'}</button>` : ''}
           </div>
           ${state.isAdmin ? `<div class="card-actions" style="justify-content:flex-start;margin-top:6px;">
@@ -3910,11 +3960,13 @@ function nearestLockedAchievement(agg){
   return best;
 }
 
-function fmtAchDate(iso){
+// Formato de fecha consistente en toda la app: "1 sept 2026" en vez de "2026-09-01" crudo.
+function fmtDate(iso){
   if(!iso) return '';
   try{ return new Date(iso+'T00:00:00').toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'}); }
   catch(e){ return iso; }
 }
+const fmtAchDate = fmtDate; // alias por compatibilidad con el nombre anterior
 
 // ---------- TÍTULOS DE LIGA (dinámicos, un solo dueño, se roban) ----------
 // direction 'max' = gana quien tiene el valor más alto; 'min' = gana quien tiene el más bajo.
@@ -4635,7 +4687,7 @@ function renderTemporadasHallOfFame() {
       <div style="background:var(--court);padding:12px;border-radius:8px;border:1px solid var(--line);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <strong style="color:var(--chalk);font-size:15px;">${esc(s.name)}</strong>
-          <span style="font-size:11px;color:var(--muted);">${s.date}</span>
+          <span style="font-size:11px;color:var(--muted);">${fmtDate(s.date)}</span>
         </div>
         <div style="font-size:13px;color:var(--ball);">
           🏆 <strong>Campeón Singles:</strong> ${champ ? esc(champ.name) : '—'}
@@ -5578,7 +5630,7 @@ function showH2H(){
     return;
   }
 
-  const rows = rec.matches.map(m => `<div class="podium-row"><span>${esc(m.tournamentName)} ${m.date ? '· ' + m.date : ''}</span><span>${esc(m.scoreline)}${m.winnerId ? ` · gana ${esc(playerName(m.winnerId))}` : ''}</span></div>`).join('');
+  const rows = rec.matches.map(m => `<div class="podium-row"><span>${esc(m.tournamentName)} ${m.date ? '· ' + fmtDate(m.date) : ''}</span><span>${esc(m.scoreline)}${m.winnerId ? ` · gana ${esc(playerName(m.winnerId))}` : ''}</span></div>`).join('');
 
   el.innerHTML = `
     ${radarHtml}
@@ -5832,7 +5884,7 @@ function openPlayerProfileModal(playerId){
 
   const recentRows = results.slice(-8).reverse().map(r => `
   <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
-    <span>${r.date} · ${esc(r.label)}</span>
+    <span>${fmtDate(r.date)} · ${esc(r.label)}</span>
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✔ Victoria':'❌ Derrota'}</span>
       ${r.matchId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${r.matchId}')">📲 Tarjeta</button>` : ''}
@@ -6393,7 +6445,7 @@ function openPairsModal(tid){
     <h2>Parejas</h2>
     <div class="section-sub">Marca quiénes participan y sortéalas al azar (más entretenido), o arma las parejas tú mismo más abajo.</div>
     <div class="check-list" id="pair-participants-list" style="margin-bottom:10px;">${checklistHtml}</div>
-    <button type="button" class="btn btn-ball btn-sm" style="margin-bottom:16px;" onclick="AceApp.randomizePairs()">🎲 Sortear parejas al azar</button>
+    <button type="button" class="btn btn-ball btn-sm" style="margin-bottom:16px;" onclick="AceApp.randomizePairs()">${actionIconSvg('shuffle')} Sortear parejas al azar</button>
     <div id="pairs-list">${pairsRows}</div>
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="AceApp.addPairRow()">+ Agregar pareja</button>
     <div class="modal-actions">
@@ -6726,6 +6778,26 @@ function applySurfaceTheme(){
   if(soundBtn){
     soundBtn.textContent = state.soundsOn ? '🔊 Sonido' : '🔇 Sonido';
   }
+  app.classList.toggle('density-compact', state.density === 'compact');
+  const densityBtn = document.getElementById('density-toggle-btn');
+  if(densityBtn){
+    densityBtn.textContent = state.density === 'compact' ? '☰ Vista cómoda' : '☰ Vista compacta';
+  }
+  app.setAttribute('data-theme', state.lightMode ? 'light' : 'dark');
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  if(themeBtn){
+    themeBtn.textContent = state.lightMode ? '🌙 Modo oscuro' : '☀️ Modo claro';
+  }
+}
+async function toggleDensity(){
+  state.density = state.density === 'compact' ? 'comfortable' : 'compact';
+  applySurfaceTheme();
+  await save('list-density', state.density, false);
+}
+async function toggleLightMode(){
+  state.lightMode = !state.lightMode;
+  applySurfaceTheme();
+  await save('light-mode', state.lightMode, false);
 }
 async function cycleSurface(){
   const idx = SURFACES.findIndex(s=>s.id===(state.surface||'clay'));
@@ -6776,7 +6848,7 @@ window.AceApp = {
   openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
   filterPlayers, setTournamentSort, setTournamentsSubTab, onCropZoom, applyCrop, toggleTextSize, initHolographicCards,
   setAchSubTab,setProfileMode, setAchCategory, setAchSearch, toggleShowcase,
-  cycleSurface, toggleSounds,
+  cycleSurface, toggleSounds, toggleDensity, toggleLightMode,
 };
 
 // ---------- INIT ----------
@@ -6890,7 +6962,7 @@ function bootApp(){
       '<div class="empty"><span class="disp">No se pudo conectar</span>' +
       'Revisa la configuración de Firebase (apiKey, reglas de Firestore, Authentication anónimo).<br><br>' +
       '<span style="color:var(--clay-light);font-family:monospace;font-size:11px;display:block;margin-bottom:14px;">' + (err && err.message ? err.message : String(err)) + '</span>' +
-      '<button class="btn btn-ball btn-sm" onclick="AceApp.bootApp()">🔄 Reintentar</button></div>';
+      '<button class="btn btn-ball btn-sm" onclick="AceApp.bootApp()"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M16 10a6 6 0 11-2-4.5"/><path d="M16 3v4h-4"/></svg> Reintentar</button></div>';
     hideSplash();
   });
 }
@@ -7565,7 +7637,7 @@ async function updateChallengeStatus(challengeId, newStatus) {
   if (pendingForMe) {
     pendingForMe.notifiedTo = true;
     save('challenges', state.challenges);
-    aceAlert(`⚔️ ¡NUEVO DESAFÍO! ${playerName(pendingForMe.fromId)} te ha retado para el día ${pendingForMe.date}.`);
+    aceAlert(`⚔️ ¡NUEVO DESAFÍO! ${playerName(pendingForMe.fromId)} te ha retado para el día ${fmtDate(pendingForMe.date)}.`);
     return;
   }
 
@@ -7582,7 +7654,7 @@ async function updateChallengeStatus(challengeId, newStatus) {
     let resultText = 'ACEPTÓ 🎾';
     if (respondedForMe.status === 'rejected') resultText = 'RECHAZÓ ❌';
     if (respondedForMe.status === 'cancelled') resultText = 'CANCELÓ 🚫';
-    aceAlert(`🔔 ${playerName(respondedForMe.toId)} ${resultText} tu desafío programado para el ${respondedForMe.date}.`);
+    aceAlert(`🔔 ${playerName(respondedForMe.toId)} ${resultText} tu desafío programado para el ${fmtDate(respondedForMe.date)}.`);
   }
 }
   async function closeSeason() {
