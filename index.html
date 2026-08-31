@@ -128,6 +128,21 @@
 #ace-app .brand-video { width: 100%; height: 100%; object-fit: contain; display: block; mix-blend-mode: screen; }
 #ace-app .ball-shadow { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
 
+/* ---------- MENÚ DE AJUSTES (engranaje que agrupa los toggles) ---------- */
+#ace-app .settings-menu-wrap { position: relative; }
+#ace-app .settings-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  background: var(--court-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px; min-width: 200px; display: flex; flex-direction: column; gap: 2px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+#ace-app .settings-item {
+  background: none; border: none; color: var(--chalk); text-align: left;
+  font-family: 'Work Sans'; font-size: 13px; padding: 9px 10px; border-radius: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+#ace-app .settings-item:hover { background: var(--court-3); }
+
 #ace-app .flame-glow-outer {
   position: absolute; left: 50%; bottom: 6px; width: 92px; height: 92px;
   transform: translate(-50%,10%);
@@ -758,12 +773,20 @@
       </div>
       <div id="identity-chip"></div>
       <div id="admin-chip"></div>
-      <button class="btn btn-ghost btn-sm" id="pwa-install-btn" onclick="AceApp.installPwa()" style="display:none;" title="Instalar la app en tu dispositivo" aria-label="Instalar app"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 16h12"/></svg> Instalar app</button>
-      <button class="btn btn-ghost btn-sm" onclick="AceApp.toggleTextSize()" title="Cambiar tamaño de texto" aria-label="Cambiar tamaño de texto">🔤 Tamaño de texto</button>
-      <button class="btn btn-ghost btn-sm" id="density-toggle-btn" onclick="AceApp.toggleDensity()" title="Vista compacta o cómoda" aria-label="Cambiar densidad de lista"></button>
-      <button class="btn btn-ghost btn-sm" id="theme-toggle-btn" onclick="AceApp.toggleLightMode()" title="Modo claro u oscuro" aria-label="Cambiar modo claro u oscuro"></button>
-      <button class="btn btn-ghost btn-sm" id="surface-toggle-btn" onclick="AceApp.cycleSurface()" title="Cambiar superficie de cancha" aria-label="Cambiar superficie de cancha"></button>
-      <button class="btn btn-ghost btn-sm" id="sound-toggle-btn" onclick="AceApp.toggleSounds()" title="Activar o silenciar sonidos" aria-label="Activar o silenciar sonidos"></button>
+      <div class="settings-menu-wrap">
+        <button class="btn btn-ghost btn-sm" id="settings-gear-btn" onclick="AceApp.toggleSettingsMenu(event)" title="Ajustes" aria-label="Ajustes">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.6"/><path d="M10 3v2M10 15v2M17 10h-2M5 10H3M14.9 5.1l-1.4 1.4M6.5 13.5l-1.4 1.4M14.9 14.9l-1.4-1.4M6.5 6.5L5.1 5.1"/></svg>
+          Ajustes
+        </button>
+        <div class="settings-dropdown" id="settings-dropdown" style="display:none;">
+          <button class="settings-item" id="pwa-install-btn" onclick="AceApp.installPwa()" style="display:none;">📲 Instalar app</button>
+          <button class="settings-item" onclick="AceApp.toggleTextSize()">🔤 Tamaño de texto</button>
+          <button class="settings-item" id="density-toggle-btn" onclick="AceApp.toggleDensity()"></button>
+          <button class="settings-item" id="theme-toggle-btn" onclick="AceApp.toggleLightMode()"></button>
+          <button class="settings-item" id="surface-toggle-btn" onclick="AceApp.cycleSurface()"></button>
+          <button class="settings-item" id="sound-toggle-btn" onclick="AceApp.toggleSounds()"></button>
+        </div>
+      </div>
       <input type="file" id="restore-file-input" accept="application/json" style="display:none;" onchange="AceApp.handleRestoreFile(event)">
     </div>
   </div>
@@ -6799,6 +6822,20 @@ async function toggleLightMode(){
   applySurfaceTheme();
   await save('light-mode', state.lightMode, false);
 }
+// Abre/cierra el menú de ajustes (engranaje). Se cierra solo si se hace clic afuera.
+function toggleSettingsMenu(ev){
+  if(ev) ev.stopPropagation();
+  const dropdown = document.getElementById('settings-dropdown');
+  if(!dropdown) return;
+  const isOpen = dropdown.style.display !== 'none';
+  dropdown.style.display = isOpen ? 'none' : 'flex';
+}
+document.addEventListener('click', (e)=>{
+  const wrap = document.querySelector('#ace-app .settings-menu-wrap');
+  const dropdown = document.getElementById('settings-dropdown');
+  if(!wrap || !dropdown || dropdown.style.display === 'none') return;
+  if(!wrap.contains(e.target)) dropdown.style.display = 'none';
+});
 async function cycleSurface(){
   const idx = SURFACES.findIndex(s=>s.id===(state.surface||'clay'));
   const next = SURFACES[(idx+1) % SURFACES.length];
@@ -6848,7 +6885,7 @@ window.AceApp = {
   openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
   filterPlayers, setTournamentSort, setTournamentsSubTab, onCropZoom, applyCrop, toggleTextSize, initHolographicCards,
   setAchSubTab,setProfileMode, setAchCategory, setAchSearch, toggleShowcase,
-  cycleSurface, toggleSounds, toggleDensity, toggleLightMode,
+  cycleSurface, toggleSounds, toggleDensity, toggleLightMode, toggleSettingsMenu,
 };
 
 // ---------- INIT ----------
