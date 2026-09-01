@@ -572,6 +572,22 @@
 @keyframes rankupPop { 0%{transform:scale(0.7);opacity:0;} 100%{transform:scale(1);opacity:1;} }
 @keyframes rankupBounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
 
+/* ---------- BOTÓN FLOTANTE DE CARGA RÁPIDA (punto 4) ---------- */
+#ace-app .fab-quick-match {
+  position: fixed; right: 20px; bottom: 24px; z-index: 400;
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: var(--ball); color: var(--court); font-size: 28px; font-weight: 700;
+  display: none; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+#ace-app .fab-quick-match:active { transform: scale(0.94); }
+@media (max-width: 560px) {
+  #ace-app .fab-quick-match { bottom: 88px; }
+}
+/* ---------- BANNER GLOBAL "PRÓXIMO PARTIDO" (punto 6) ---------- */
+#global-next-match:empty { display: none; }
+#global-next-match { margin-bottom: 6px; }
+
 @media (max-width: 560px) {
   #ace-app .rank-row { grid-template-columns: 34px 40px 1fr auto; padding: 8px 10px; gap: 10px; }
   #ace-app .section-head h2 { font-size: 22px; }
@@ -745,7 +761,18 @@
     transition: opacity 0.5s ease;
   }
   #ace-splash.ace-splash-hide { opacity: 0; pointer-events: none; }
-  #ace-splash video { width: 220px; height: 160px; object-fit: contain; mix-blend-mode: screen; }
+  #ace-splash video { width: 220px; height: 160px; object-fit: contain; mix-blend-mode: screen; border-radius: 16px; }
+  /* Igual que con .brand-video: algunos navegadores (Safari/iOS) no soportan
+     mix-blend-mode en <video>, así que el fondo negro del clip queda visible
+     tal cual. En tema oscuro se camufla con --court (#0A0A0A), pero en tema
+     claro queda expuesto. Solución: en tema claro, en vez de intentar
+     "esconder" el negro, lo convertimos en una placa oscura a propósito
+     (mismo criterio que ya se usa en el logo del header). */
+  #ace-app[data-theme="light"] #ace-splash video {
+    mix-blend-mode: normal;
+    background: #0A0A0A;
+    padding: 10px;
+  }
   #ace-splash .ace-splash-brand { font-family: 'Bebas Neue'; font-size: 22px; letter-spacing: 0.08em; color: var(--chalk); }
 </style>
 
@@ -795,8 +822,10 @@
   <div class="tabs" id="tabs"></div>
 
   <div class="wrap">
+    <div id="global-next-match"></div>
     <div class="section" id="section-content"></div>
   </div>
+  <button id="quick-match-fab" class="fab-quick-match" onclick="AceApp.openCasualMatchModal()" title="Anotar partido rápido">+</button>
 </div>
 
 
@@ -2365,6 +2394,112 @@ function playerMatchStats(playerId){
   });
   return { played: matches.length, wins, pct: matches.length ? Math.round(wins/matches.length*100) : null };
 }
+// ---------- ESTADÍSTICAS AVANZADAS POR JUGADOR (punto 19 de mejoras) ----------
+// Promedio de games ganados por set: recorre TODOS los partidos de singles con
+// marcador cargado (de torneo y libres), sin depender de arbitraje en vivo.
+function avgGamesPerSetForPlayer(playerId){
+  let gamesWon = 0, setsPlayed = 0;
+  const consider = (sets, mySide) => {
+    (sets||[]).forEach(s=>{
+      if(!s || s[0]==null || s[1]==null) return;
+      const mine = Number(mySide==='A' ? s[0] : s[1]);
+      if(Number.isNaN(mine)) return;
+      gamesWon += mine; setsPlayed++;
+    });
+  };
+  allSinglesMatches().forEach(m=>{
+    if((m.sideA||[])[0]===playerId) consider(m.sets,'A');
+    else if((m.sideB||[])[0]===playerId) consider(m.sets,'B');
+  });
+  (state.casualMatches||[]).forEach(m=>{
+    if(m.mode==='doubles') return;
+    if((m.sideA||[])[0]===playerId) consider(m.sets,'A');
+    else if((m.sideB||[])[0]===playerId) consider(m.sets,'B');
+  });
+  return setsPlayed>0 ? gamesWon/setsPlayed : null;
+}
+// % de games de saque retenidos: requiere partidos arbitrados en vivo (es el único
+// registro que sabe quién sacaba en cada game). Con menos de 3 games servidos no
+// alcanza para un dato confiable.
+function serveHoldPctForPlayer(playerId){
+  const agg = playerUmpireStats()[playerId];
+  if(!agg || agg.servedGames < 3) return null;
+  return Math.round((agg.heldGames/agg.servedGames)*100);
+}
+// Mejor superficie: usa el campo "courtSurface" del torneo (solo disponible en
+// torneos creados/editados después de sumar este campo). Pide al menos 2 partidos
+// jugados en una superficie para considerarla.
+function bestSurfaceForPlayer(playerId){
+  const bySurface = {};
+  state.tournaments.forEach(t=>{
+    if(!t.courtSurface) return;
+    (t.bracket||[]).flat().forEach(m=>{
+      if(!m.winner || (m.p1!==playerId && m.p2!==playerId)) return;
+      if(!bySurface[t.courtSurface]) bySurface[t.courtSurface] = {wins:0, played:0};
+      bySurface[t.courtSurface].played++;
+      if(m.winner===playerId) bySurface[t.courtSurface].wins++;
+    });
+  });
+  let best = null;
+  Object.entries(bySurface).forEach(([s,v])=>{
+    if(v.played < 2) return;
+    const pct = v.wins/v.played*100;
+    if(!best || pct>best.pct) best = { surface:s, pct: Math.round(pct), played:v.played };
+  });
+  return best;
+}
+function advancedStatsHtml(playerId){
+  const avgGames = avgGamesPerSetForPlayer(playerId);
+  const holdPct = serveHoldPctForPlayer(playerId);
+  const best = bestSurfaceForPlayer(playerId);
+  const surfaceDef = best ? SURFACES.find(s=>s.id===best.surface) : null;
+  const surfaceLabel = surfaceDef ? surfaceDef.label : (best ? best.surface : null);
+  return `<div class="card" style="margin:14px 0;">
+    <h4 style="margin:0 0 10px;color:var(--chalk);">📊 Estadísticas avanzadas</h4>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;">
+      <div><div class="disp" style="font-size:20px;color:var(--ball);">${avgGames!=null?avgGames.toFixed(1):'—'}</div><div class="tourn-meta">Games/set (prom.)</div></div>
+      <div><div class="disp" style="font-size:20px;color:var(--ball);">${holdPct!=null?holdPct+'%':'—'}</div><div class="tourn-meta">Saque retenido${holdPct==null?' (falta arbitrar en vivo)':''}</div></div>
+      <div><div class="disp" style="font-size:15px;color:var(--ball);">${surfaceLabel?surfaceLabel+' · '+best.pct+'%':'—'}</div><div class="tourn-meta">Mejor superficie${!surfaceLabel?' (sin datos aún)':''}</div></div>
+    </div>
+  </div>`;
+}
+// Evolución personal de puntos por torneo completado (punto 20 de mejoras, versión
+// individual — complementa el gráfico comparativo del top 5 que ya existe en Ranking).
+function playerEvolutionSvg(playerId){
+  const completed = [...state.tournaments].filter(t=>t.status==='completed').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(completed.length<2) return '';
+  let cum = 0;
+  const series = [0];
+  completed.forEach(t=>{
+    const mult = tierPointMultiplier(t.tier);
+    (t.bracket||[]).flat().forEach(m=>{
+      if(!m.sets || !m.p1 || !m.p2) return;
+      let g = null;
+      if(m.p1===playerId) g = m.sets.reduce((sum,s)=> sum + (Number(s[0])||0), 0);
+      else if(m.p2===playerId) g = m.sets.reduce((sum,s)=> sum + (Number(s[1])||0), 0);
+      if(g==null) return;
+      cum += Math.round(g*mult*10)/10 + PARTICIPATION_POINT_PER_ROUND;
+    });
+    series.push(cum);
+  });
+  if(series.every(v=>v===0)) return '';
+  const steps = series.length;
+  const maxVal = Math.max(1, ...series);
+  const W = 560, H = 140, padL = 30, padB = 18, padT = 10, padR = 10;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xAt = (i) => padL + (plotW * i) / (steps-1);
+  const yAt = (v) => padT + plotH - (plotH * v) / maxVal;
+  const pts = series.map((v,i)=> `${xAt(i)},${yAt(v)}`).join(' ');
+  const lastX = xAt(series.length-1), lastY = yAt(series[series.length-1]);
+  return `<div class="card" style="margin:14px 0;">
+    <div class="tourn-meta" style="margin-bottom:6px;">📈 Tu evolución de puntos (por torneo completado)</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+      <line x1="${padL}" y1="${padT+plotH}" x2="${W-padR}" y2="${padT+plotH}" stroke="var(--line)" stroke-width="1"/>
+      <polyline points="${pts}" fill="none" stroke="var(--ball)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lastX}" cy="${lastY}" r="3.5" fill="var(--ball)"/>
+    </svg>
+  </div>`;
+}
 function tournamentsPlayedCount(playerId){
   const s = state.tournaments.filter(t=>t.status==='completed' && (t.participants||[]).includes(playerId)).length;
   const d = state.doubles.filter(t=>t.status==='completed' && (t.pairs||[]).some(pair=>pair.includes(playerId))).length;
@@ -2787,6 +2922,8 @@ function render() {
     renderIdentity();
     renderAdmin();
     applySurfaceTheme();
+    renderFab();
+    renderGlobalNextMatch();
 
     const el = document.getElementById('section-content');
     if (!el) return;
@@ -2819,6 +2956,21 @@ function render() {
         el.classList.add('fade-tab');
         lastRenderedTab = state.tab;
     }
+}
+
+// Botón flotante de carga rápida (punto 4 de mejoras): solo visible para el admin,
+// desde cualquier pestaña, para no tener que ir hasta Ranking a anotar un partido libre.
+function renderFab(){
+  const el = document.getElementById('quick-match-fab');
+  if(!el) return;
+  el.style.display = state.isAdmin ? 'flex' : 'none';
+}
+// Banner "próximo partido" visible en toda la app (punto 6), no solo en Mi Perfil.
+// Se oculta en la propia pestaña de perfil para no duplicar el widget que ya se ve ahí.
+function renderGlobalNextMatch(){
+  const el = document.getElementById('global-next-match');
+  if(!el) return;
+  el.innerHTML = (state.myPlayerId && state.tab !== 'profile') ? nextMatchWidgetHtml(state.myPlayerId) : '';
 }
 
 // ---------- "MI PRÓXIMO PARTIDO" (torneos, dobles y desafíos pendientes) ----------
@@ -2955,6 +3107,8 @@ function nextMatchWidgetHtml(playerId){
         ${badges.length ? badges.map(b => `<span class="tier-badge" style="font-size:11px;padding:4px 8px;background:var(--court);border:1px solid var(--line);">${b.e} ${esc(b.t)}</span>`).join('') : '<span style="color:var(--muted);font-size:12px;">Sin insignias aún.</span>'}
       </div>
     </div>
+    ${advancedStatsHtml(state.myPlayerId)}
+    ${playerEvolutionSvg(state.myPlayerId)}
     <div class="card">
       <h4 style="margin:0 0 10px;color:var(--chalk);">Últimos Partidos</h4>
       <div class="podium">${recentRows || '<div style="color:var(--muted);font-size:12px;">Sin partidos registrados.</div>'}</div>
@@ -3422,7 +3576,10 @@ function podiumHtml(t, isDoubles){
 
 // ---------- VIEW: PLAYERS ----------
 function viewPlayers(){
-  const head = `<div class="section-head"><h2>Jugadores</h2>${state.isAdmin?`<button class="btn btn-primary" onclick="AceApp.openPlayerModal()">+ Nuevo jugador</button>`:''}</div>`;
+  const head = `<div class="section-head"><h2>Jugadores</h2><div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button class="btn btn-ghost" onclick="AceApp.openH2HModal()">⚔️ Comparar</button>
+    ${state.isAdmin?`<button class="btn btn-primary" onclick="AceApp.openPlayerModal()">+ Nuevo jugador</button>`:''}
+  </div></div>`;
   if(state.players.length===0){
     return head + `<div class="empty"><span class="disp">El circuito está vacío</span>Usa el botón "Identifícate o regístrate" arriba para agregar al primer jugador.</div>`;
   }
@@ -3470,6 +3627,7 @@ function playersGridHtml(){
           ${state.myPlayerId && p.id !== state.myPlayerId ? `
             <button class="btn btn-ball btn-sm" onclick="AceApp.issueChallenge('${p.id}')">⚔️ Desafiar</button>
           ` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal('${p.id}')">🤝 Comparar</button>
           ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPlayerModal('${p.id}')">Editar</button>` : ''}
           ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deletePlayer('${p.id}')">Eliminar</button>` : ''}
         </div>
@@ -5937,10 +6095,13 @@ function openPlayerProfileModal(playerId){
     </div>
     ${closest ? `<div class="section-sub">🎯 Set más ajustado: ${closest.score} vs ${esc(playerName(closest.rival))} (${esc(closest.tournamentName)})</div>` : ''}
     ${radarCardHtml(playerId)}
+    ${advancedStatsHtml(playerId)}
+    ${playerEvolutionSvg(playerId)}
     <h3 style="font-size:15px;margin:14px 0 6px;color:var(--chalk);">Historial reciente</h3>
     <div class="podium">${recentRows || '<div class="tourn-meta">Sin partidos con marcador todavía.</div>'}</div>
     <div class="modal-actions">
       <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal('${playerId}')">🤝 Cara a cara</button>
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.generatePlayerCardImage('${playerId}')">📸 Compartir tarjeta</button>
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button>
     </div>`;
   openModal(html);
@@ -6179,6 +6340,9 @@ function openTournamentModal(id){
     <div class="field"><label>Nombre del torneo</label><input type="text" id="f-tname" value="${editing?esc(editing.name):''}" placeholder="Ej: Apertura de Verano"></div>
     <div class="field"><label>Fecha</label><input type="date" id="f-tdate" value="${editing?editing.date:''}"></div>
     <div class="field"><label>Categoría</label>${tierPickerHtml(editing?editing.tier:null)}</div>
+    <div class="field"><label>Superficie</label>
+      <select id="f-surface">${SURFACES.map(s=>`<option value="${s.id}" ${(editing?editing.courtSurface:'clay')===s.id?'selected':''}>${s.label}</option>`).join('')}</select>
+    </div>
     <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
       <input type="checkbox" id="f-sudden-death" style="width:auto;" ${editing && editing.suddenDeath ? 'checked' : ''}>
       <label style="margin:0;">⚔️ Modo Sudden Death — cualquier game perdido pesa; si el campeón no pierde ni un solo game en todo el torneo, se lleva la insignia "Filo de Navaja"</label>
@@ -6200,7 +6364,7 @@ async function saveTournament(btn, id){
     const block = checkTierFrequency(state.tournaments, tierId, dateVal);
     if(block){ aceAlert(block); return; }
   }
-  const data = { name, date: dateVal, tier: tierId, suddenDeath: document.getElementById('f-sudden-death').checked, matchRules: readMatchRulesFields('f') };
+  const data = { name, date: dateVal, tier: tierId, courtSurface: document.getElementById('f-surface').value, suddenDeath: document.getElementById('f-sudden-death').checked, matchRules: readMatchRulesFields('f') };
   await withLoading(btn, 'Guardando...', async () => {
     if(id){
       Object.assign(state.tournaments.find(t=>t.id===id), data);
