@@ -685,6 +685,13 @@
   animation: ace-skel-shine 1.4s ease infinite;
   border-radius: 8px;
 }
+/* El shimmer de arriba es blanco translúcido: perfecto sobre fondo oscuro, pero
+   invisible (blanco sobre crema clarito) en tema claro. Acá va la versión oscura
+   translúcida para que se siga viendo el efecto "brillito" en tema claro. */
+#ace-app[data-theme="light"] .skeleton {
+  background: linear-gradient(90deg, rgba(32,29,20,0.06) 25%, rgba(32,29,20,0.13) 37%, rgba(32,29,20,0.06) 63%);
+  background-size: 400% 100%;
+}
 @keyframes ace-skel-shine {
   0% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
@@ -709,6 +716,13 @@
   width:62%;
   border:2px solid rgba(244,240,226,0.28);
   border-radius:50%;
+}
+/* Misma lógica que el shimmer: las "costuras" de la pelota-esqueleto son crema
+   translúcido (se ven bien sobre fondo oscuro); en tema claro pasan a oscuro
+   translúcido para no perderse contra el fondo. */
+#ace-app[data-theme="light"] .skel-ball::before,
+#ace-app[data-theme="light"] .skel-ball::after {
+  border-color: rgba(32,29,20,0.28);
 }
 #ace-app .skel-ball::before { left:-27%; }
 #ace-app .skel-ball::after { right:-27%; }
@@ -7098,13 +7112,20 @@ function rankingSkeletonHtml(){
 // Cancha de tenis dibujada en SVG con un brillo (shimmer) que recorre las líneas
 // mientras carga la app, más una pelota que rebota en el medio de la cancha.
 function tennisCourtSkeletonSvg(){
+  // Los trazos y el brillo de la cancha estaban en crema translúcido (perfectos
+  // sobre fondo oscuro, invisibles sobre fondo claro). Se leen acá en vez de
+  // depender de state.lightMode porque este SVG se dibuja ANTES de que termine
+  // de cargar el estado (es el skeleton inicial); el atributo data-theme del DOM
+  // ya está correcto desde el arranque gracias al script anti-flash.
+  const isLight = document.getElementById('ace-app')?.getAttribute('data-theme') === 'light';
+  const lineRgb = isLight ? '32,29,20' : '244,240,226';
   return `<div class="skel-court-wrap">
     <svg class="skel-court-svg" viewBox="0 0 240 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cargando circuito...">
       <defs>
         <linearGradient id="skelCourtShine" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="rgba(244,240,226,0.05)"/>
-          <stop offset="50%" stop-color="rgba(244,240,226,0.6)"/>
-          <stop offset="100%" stop-color="rgba(244,240,226,0.05)"/>
+          <stop offset="0%" stop-color="rgba(${lineRgb},0.05)"/>
+          <stop offset="50%" stop-color="rgba(${lineRgb},0.6)"/>
+          <stop offset="100%" stop-color="rgba(${lineRgb},0.05)"/>
           <animateTransform attributeName="gradientTransform" type="translate" from="-240 0" to="240 0" dur="1.6s" repeatCount="indefinite"/>
         </linearGradient>
       </defs>
@@ -7112,12 +7133,12 @@ function tennisCourtSkeletonSvg(){
       <!-- Base: trazado completo de la cancha, siempre visible y tenue, para que
            se reconozca de inmediato como cancha de tenis (líneas de dobles, de
            individuales, red, cuadros de servicio y línea central de servicio). -->
-      <g fill="none" stroke="rgba(244,240,226,0.16)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <g fill="none" stroke="rgba(${lineRgb},0.16)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <rect x="8" y="8" width="224" height="104"/>
         <rect x="28" y="8" width="184" height="104"/>
         <line x1="8" y1="60" x2="232" y2="60"/>
       </g>
-      <g fill="none" stroke="rgba(244,240,226,0.16)" stroke-width="2" stroke-linecap="round">
+      <g fill="none" stroke="rgba(${lineRgb},0.16)" stroke-width="2" stroke-linecap="round">
         <line x1="28" y1="36" x2="212" y2="36"/>
         <line x1="28" y1="84" x2="212" y2="84"/>
         <line x1="120" y1="36" x2="120" y2="84"/>
