@@ -381,6 +381,18 @@
   background-position: var(--holo-x) var(--holo-y), var(--holo-x) var(--holo-y);
   mix-blend-mode: color-dodge;
 }
+/* color-dodge "quema" a blanco sobre una base clara (las cards usan --court-2,
+   que en tema claro es blanco/crema) — ahí el brillo queda invisible. En tema
+   claro se cambia a "overlay", que sí conserva contraste sobre fondos claros, y
+   se oscurece un poco el degradé para que el foil se note sin verse sucio. */
+#ace-app[data-theme="light"] .player-card.holo::after {
+  background:
+    radial-gradient(circle at var(--holo-x) var(--holo-y), rgba(120,90,10,0.5), transparent 42%),
+    linear-gradient(115deg,
+      rgba(200,140,20,0.55) 0%, rgba(230,180,60,0.5) 20%, rgba(150,100,10,0.55) 40%,
+      rgba(220,160,50,0.5) 60%, rgba(120,80,10,0.55) 80%, rgba(200,140,20,0.55) 100%);
+  mix-blend-mode: overlay;
+}
 #ace-app .player-card.holo-1 { box-shadow: 0 0 0 1px rgba(212,175,55,0.5), 0 4px 18px rgba(212,175,55,0.18); }
 #ace-app .player-card.holo-2 { box-shadow: 0 0 0 1px rgba(197,199,204,0.5), 0 4px 18px rgba(197,199,204,0.16); }
 #ace-app .player-card.holo-3 { box-shadow: 0 0 0 1px rgba(205,127,50,0.5), 0 4px 18px rgba(205,127,50,0.16); }
