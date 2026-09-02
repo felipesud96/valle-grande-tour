@@ -3372,7 +3372,7 @@ function viewRanking(){
           </div>
         </div>
         <div class="rank-actions">
-          <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openH2HModal('${r.id}')">⚔️</button>
+          <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openMyH2H('${r.id}')">⚔️</button>
           <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span>${lastPtsHtml(mv.lastPts)}<span class="lbl">pts</span></div>
         </div>
       </div>
@@ -3623,7 +3623,7 @@ function playersGridHtml(){
           ${state.myPlayerId && p.id !== state.myPlayerId ? `
             <button class="btn btn-ball btn-sm" onclick="AceApp.issueChallenge('${p.id}')">⚔️ Desafiar</button>
           ` : ''}
-          <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal('${p.id}')">🤝 Comparar</button>
+          <button class="btn btn-ghost btn-sm" onclick="AceApp.openMyH2H('${p.id}')">🤝 Comparar</button>
           ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPlayerModal('${p.id}')">Editar</button>` : ''}
           ${state.isAdmin ? `<button class="btn btn-danger btn-sm" onclick="AceApp.deletePlayer('${p.id}')">Eliminar</button>` : ''}
         </div>
@@ -5770,6 +5770,19 @@ async function deleteCasualMatch(matchId){
   aceAlert('Partido libre eliminado.');
 }
 // ---- head to head modal ----
+// Cara a cara directo "yo vs. este jugador", para el botón que aparece junto a
+// cada fila (ranking, jugadores, perfil). Si todavía no elegiste tu identidad,
+// o si el jugador clickeado sos vos mismo, cae de vuelta al selector genérico.
+function openMyH2H(opponentId){
+  if(!state.myPlayerId || opponentId === state.myPlayerId){
+    openH2HModal(opponentId === state.myPlayerId ? null : opponentId);
+    return;
+  }
+  openH2HModal(state.myPlayerId);
+  const bSel = document.getElementById('h2h-b');
+  if(bSel) bSel.value = opponentId;
+  showH2H();
+}
 function openH2HModal(preId){
   if(state.players.length<2){ aceAlert('Necesitas al menos 2 jugadores para comparar.'); return; }
   const optsFor = (selId) => state.players.map(p=>`<option value="${p.id}" ${selId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
@@ -6096,7 +6109,7 @@ function openPlayerProfileModal(playerId){
     <h3 style="font-size:15px;margin:14px 0 6px;color:var(--chalk);">Historial reciente</h3>
     <div class="podium">${recentRows || '<div class="tourn-meta">Sin partidos con marcador todavía.</div>'}</div>
     <div class="modal-actions">
-      <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal('${playerId}')">🤝 Cara a cara</button>
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.openMyH2H('${playerId}')">🤝 Cara a cara</button>
       <button class="btn btn-ghost btn-sm" onclick="AceApp.generatePlayerCardImage('${playerId}')">📸 Compartir tarjeta</button>
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button>
     </div>`;
@@ -7034,7 +7047,7 @@ window.AceApp = {
   openIdentityModal, setIdentity,
   openAdminModal, checkAdminPin, setAdminPin, exitAdmin, resetAdminPin,
   downloadBackup, triggerRestore, handleRestoreFile, __resolveConfirm,
-  openMatchModal, saveMatch, deleteMatch, openH2HModal, showH2H, drawBracket, openPlayerProfileModal, shareTournament,
+  openMatchModal, saveMatch, deleteMatch, openH2HModal, openMyH2H, showH2H, drawBracket, openPlayerProfileModal, shareTournament,
   openSettingsModal, saveSettings,
   openTournamentModal, saveTournament, deleteTournament, selectTier,
   openParticipantsModal, saveParticipants, openResultsModal, saveResults,
