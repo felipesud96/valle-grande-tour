@@ -49,6 +49,10 @@
   font-size: var(--ace-text-scale, 100%);
   zoom: var(--ace-text-scale, 100%);
   transition: background 0.4s ease;
+  /* Punto 3 de mejoras: números de ancho fijo en toda la app, para que puntajes,
+     posiciones y rankings no "bailen" de ancho al cambiar de dígito. Solo afecta
+     el ancho de los números; el resto del texto queda igual. */
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- SCROLLBAR PERSONALIZADO (punto 4) ---------- */
@@ -258,8 +262,16 @@
 #ace-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 600; }
 #ace-app .btn-ghost:hover { border-color: var(--ball); color: var(--ball); }
 #ace-app .btn-ball { background: var(--ball); color: var(--ink); font-weight: 700; box-shadow: 0 2px 8px rgba(212,175,55,0.35); }
+#ace-app .btn-ball:hover { filter: brightness(1.08); box-shadow: 0 3px 10px rgba(212,175,55,0.5); }
 #ace-app .btn-sm { padding: 6px 11px; font-size: 12px; }
 #ace-app .btn-danger { background: transparent; color: #E08A6E; border-color: rgba(224,138,110,0.4); font-weight: 600;}
+#ace-app .btn-danger:hover { background: rgba(224,138,110,0.12); border-color: #E08A6E; }
+#ace-app .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Punto 8 de mejoras: affordance de hover también en inputs/selects (no solo
+   focus), para que se sienta interactivo antes de clickear. */
+#ace-app input:not(:disabled):hover, #ace-app select:not(:disabled):hover, #ace-app textarea:not(:disabled):hover {
+  border-color: var(--ball);
+}
 
 /* ---------- RANKING ---------- */
 #ace-app .rank-table { display: flex; flex-direction: column; gap: 8px; }
@@ -466,10 +478,21 @@
 #ace-app .ach-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
 #ace-app .ach-player { font-size: 11px; color: var(--ball); margin-top: 4px; }
 
-/* ---------- EMPTY STATE ---------- */
+/* ---------- EMPTY STATE (punto 9 de mejoras: versión "ilustrada") ---------- */
+/* Se mejora la clase compartida en vez de tocar cada uno de los ~38 estados
+   vacíos de la app uno por uno: todos ganan el ícono y el look nuevo de una. */
 #ace-app .empty {
-  text-align: center; padding: 40px 20px; color: var(--muted); border: 1px dashed var(--line);
-  border-radius: 12px; font-size: 13.5px;
+  text-align: center; padding: 36px 20px 28px; color: var(--muted);
+  border: 1px dashed var(--line); border-radius: 14px; font-size: 13.5px;
+  background: var(--court-2);
+}
+#ace-app .empty::before {
+  content: '';
+  display: block; width: 44px; height: 44px; margin: 0 auto 12px;
+  background-color: var(--muted); opacity: 0.35;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 3c-2.5 2.6-2.5 15.4 0 18M12 3c2.5 2.6 2.5 15.4 0 18' /%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 3c-2.5 2.6-2.5 15.4 0 18M12 3c2.5 2.6 2.5 15.4 0 18' /%3E%3C/svg%3E");
+  -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
 }
 #ace-app .empty .disp { color: var(--chalk); font-size: 22px; display:block; margin-bottom: 6px; }
 
@@ -742,6 +765,14 @@
 #ace-app .rank-trend.down { color:#B5502E; }
 #ace-app .rank-trend.flat { color:var(--muted); }
 #ace-app .rank-streak { font-size:11px; margin-left:6px; }
+/* Punto 23 de mejoras: borde animado sutil en la fila del jugador en racha
+   activa (3+ victorias seguidas), para que se note de un vistazo sin tener
+   que leer el badge de racha. */
+#ace-app .rank-row-hot { position: relative; border-color: color-mix(in srgb, var(--ball) 55%, var(--line)); animation: ace-hot-row-glow 2.4s ease-in-out infinite; }
+@keyframes ace-hot-row-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(0,0,0,0); }
+  50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ball) 25%, transparent); }
+}
 #ace-app .rank-expiry-warn { font-size:10.5px; color:#D8A34C; display:block; margin-top:2px; }
 /* Movimiento de posición (flecha junto al número de ranking) y puntos ganados en
    el último torneo, estilo tabla ATP. */
@@ -1112,6 +1143,139 @@ function rankBadgeHtml(points, size){
   const fontSize = size==='small' ? '9.5px' : '11px';
   const pad = size==='small' ? '2px 6px' : '3px 8px';
   return `<span class="tier-badge" style="background:${info.current.color}22;border:1px solid ${info.current.color};color:${info.current.color};font-size:${fontSize};padding:${pad};">${info.current.emoji} ${info.current.label}</span>`;
+}
+// ---------- MVP DEL MES (punto 26 de mejoras): voto de los jugadores ----------
+// ---------- FEED DE ACTIVIDAD DEL CIRCUITO (punto 7 de mejoras guardado antes) ----------
+// Se arma con datos que YA existen (no hace falta guardar nada nuevo): partidos
+// libres con fecha propia, y torneos cerrados (fecha del torneo). Los partidos de
+// cuadro de torneo no tienen fecha individual en el modelo de datos actual, así
+// que se representan como un solo evento por torneo completado, no partido a
+// partido — es una limitación real de los datos, no un recorte arbitrario.
+function activityFeedItems(){
+  const items = [];
+  (state.casualMatches||[]).forEach(m=>{
+    if(!m.date) return;
+    const winnerSide = matchWinnerSide(m);
+    if(!winnerSide) return;
+    const winners = (winnerSide==='A' ? m.sideA : m.sideB).map(playerName).join(' / ');
+    const losers = (winnerSide==='A' ? m.sideB : m.sideA).map(playerName).join(' / ');
+    const score = (m.sets||[]).map(s=>`${s[0]}-${s[1]}`).join(' ');
+    items.push({ date: m.date, icon: '🎾', text: `<strong>${esc(winners)}</strong> le ganó a ${esc(losers)} ${score}`, sortKey: m.date + 'b' });
+  });
+  state.tournaments.forEach(t=>{
+    if(t.status!=='completed' || !t.date) return;
+    const champ = (t.bracket && t.bracket.length) ? t.bracket[t.bracket.length-1][0] : null;
+    const champName = champ && champ.winner ? playerName(champ.winner) : null;
+    items.push({ date: t.date, icon: '🏆', text: champName ? `Se completó <strong>${esc(t.name)}</strong> — campeón: <strong>${esc(champName)}</strong>` : `Se completó <strong>${esc(t.name)}</strong>`, sortKey: t.date + 'a' });
+  });
+  return items.sort((a,b)=> b.sortKey.localeCompare(a.sortKey));
+}
+function activityFeedHtml(limit){
+  const items = activityFeedItems();
+  if(items.length===0) return '';
+  const shown = items.slice(0, limit||6);
+  const rows = shown.map(it=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;">
+    <span style="flex-shrink:0;">${it.icon}</span>
+    <div style="flex:1;">${it.text}</div>
+    <span style="color:var(--muted);font-size:11px;flex-shrink:0;">${fmtDate(it.date)}</span>
+  </div>`).join('');
+  return `<div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h4 style="margin:0;color:var(--chalk);">📋 Actividad reciente</h4>
+      ${items.length > shown.length ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openActivityFeedModal()">Ver todo</button>` : ''}
+    </div>
+    <div>${rows}</div>
+  </div>`;
+}
+function openActivityFeedModal(){
+  const items = activityFeedItems().slice(0, 40);
+  const rows = items.map(it=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;">
+    <span style="flex-shrink:0;">${it.icon}</span>
+    <div style="flex:1;">${it.text}</div>
+    <span style="color:var(--muted);font-size:11px;flex-shrink:0;">${fmtDate(it.date)}</span>
+  </div>`).join('');
+  openModal(`<button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <h2>📋 Actividad del circuito</h2>
+    <div>${rows || '<div class="empty">Sin actividad todavía.</div>'}</div>`);
+}
+function mvpMonthKey(d){
+  d = d || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function mvpMonthLabel(key){
+  const [y,m] = key.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('es-CL', { month:'long', year:'numeric' });
+}
+function mvpVoteCardHtml(){
+  if(state.players.length < 2) return '';
+  const key = mvpMonthKey();
+  const votes = (state.mvpVotes && state.mvpVotes[key]) || {};
+  const tally = {};
+  Object.values(votes).forEach(id=>{ tally[id] = (tally[id]||0) + 1; });
+  const totalVotes = Object.keys(votes).length;
+  const ranked = Object.entries(tally).sort((a,b)=>b[1]-a[1]);
+  const leaderId = ranked[0] ? ranked[0][0] : null;
+  const myVote = state.myPlayerId ? votes[state.myPlayerId] : null;
+
+  const barsHtml = ranked.slice(0,5).map(([id,count])=>{
+    const pct = totalVotes ? Math.round(count/totalVotes*100) : 0;
+    return `<div style="margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;">
+        <span>${esc(playerName(id))}</span><span style="color:var(--muted);">${count} voto${count===1?'':'s'}</span>
+      </div>
+      <div style="background:var(--court);border-radius:6px;height:8px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:var(--ball);"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h4 style="margin:0;color:var(--chalk);">🏅 MVP de ${mvpMonthLabel(key)}</h4>
+      ${totalVotes>0 ? `<span class="tourn-meta">${totalVotes} voto${totalVotes===1?'':'s'}</span>` : ''}
+    </div>
+    ${totalVotes === 0
+      ? `<div class="tourn-meta" style="margin-bottom:10px;">Todavía nadie votó este mes.</div>`
+      : `${leaderId ? `<div style="margin-bottom:10px;font-size:13px;">Liderando: <strong style="color:var(--ball);">${esc(playerName(leaderId))}</strong></div>` : ''}${barsHtml}`
+    }
+    ${state.myPlayerId
+      ? (myVote
+          ? `<div class="tourn-meta" style="margin-top:8px;">Ya votaste por <strong>${esc(playerName(myVote))}</strong> este mes.</div>`
+          : `<button class="btn btn-ball btn-sm" style="margin-top:6px;" onclick="AceApp.openMvpVoteModal()">Votar MVP del mes</button>`)
+      : `<div class="tourn-meta" style="margin-top:8px;">Identifícate para votar.</div>`
+    }
+  </div>`;
+}
+function openMvpVoteModal(){
+  if(!state.myPlayerId){ aceAlert('Identifícate primero para votar.'); return; }
+  const key = mvpMonthKey();
+  const votes = (state.mvpVotes && state.mvpVotes[key]) || {};
+  if(votes[state.myPlayerId]){ aceAlert('Ya votaste este mes.'); return; }
+  const opts = state.players.filter(p=>p.id!==state.myPlayerId).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if(!opts){ aceAlert('No hay otros jugadores para votar todavía.'); return; }
+  openModal(`<button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <h2>🏅 Votar MVP de ${mvpMonthLabel(key)}</h2>
+    <div class="section-sub">Elegí a quién considerás el jugador del mes. Un voto por persona, no se puede cambiar.</div>
+    <div class="field"><label>Jugador</label><select id="mvp-candidate">${opts}</select></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="AceApp.submitMvpVote(this)">Votar</button>
+    </div>`);
+}
+async function submitMvpVote(btn){
+  const candidateId = document.getElementById('mvp-candidate').value;
+  if(!candidateId) return;
+  const key = mvpMonthKey();
+  state.mvpVotes = state.mvpVotes || {};
+  const prevVotes = JSON.parse(JSON.stringify(state.mvpVotes));
+  state.mvpVotes[key] = state.mvpVotes[key] || {};
+  state.mvpVotes[key][state.myPlayerId] = candidateId;
+  let ok = false;
+  await withLoading(btn, 'Votando...', async () => {
+    ok = await save('mvp-votes', state.mvpVotes);
+    if(ok){ closeModal(); render(); } else { state.mvpVotes = prevVotes; }
+  });
+  if(ok){ playHitSound(); aceAlert('🏅 ¡Voto registrado!'); }
 }
 function rankProgressBarHtml(points){
   const info = rankTierInfo(points);
@@ -1829,6 +1993,10 @@ async function loadAll(){
   const tierFees = await safeGet('tier-fees', null);
   state.challenges = await safeGet('challenges', []);
   state.predictions = await safeGet('predictions', []);
+  // MVP del mes (punto 26 de mejoras): un voto por jugador identificado, por mes.
+  // Es compartido (shared=true, el default) porque el resultado de la votación es
+  // público para todo el circuito, no un dato privado de cada usuario.
+  state.mvpVotes = await safeGet('mvp-votes', {});
   if(tierFees){
     TIERS.forEach(t=>{ if(tierFees[t.id]!=null) t.fee = tierFees[t.id]; });
   }
@@ -2152,7 +2320,8 @@ function singlesMatchResultsForPlayer(playerId){
     if(t.bracket){
       t.bracket.flat().forEach(m=>{
         if(m.winner && (m.p1===playerId || m.p2===playerId) && t.date){
-          results.push({ date: t.date, won: m.winner===playerId, label: t.name });
+          const opponentId = m.p1===playerId ? m.p2 : m.p1;
+          results.push({ date: t.date, won: m.winner===playerId, label: t.name, opponentId });
         }
       });
     }
@@ -2165,7 +2334,8 @@ function singlesMatchResultsForPlayer(playerId){
     const winner = matchWinnerSide(m);
     if(!winner) return;
     const won = (inA && winner==='A') || (inB && winner==='B');
-    results.push({ date: m.date, won, label: 'Partido libre' });
+    const opponentId = inA ? (m.sideB||[])[0] : (m.sideA||[])[0];
+    results.push({ date: m.date, won, label: 'Partido libre', opponentId });
   });
   return results.sort((a,b)=>a.date.localeCompare(b.date));
 }
@@ -2890,12 +3060,9 @@ const TAB_ICONS = {
   stats: '<path d="M4 16V9M9.5 16V4M15 16v-6"/><path d="M2.5 16.5h15"/>',
   admin: '<circle cx="10" cy="10" r="2.6"/><path d="M10 3v2M10 15v2M17 10h-2M5 10H3M14.9 5.1l-1.4 1.4M6.5 13.5l-1.4 1.4M14.9 14.9l-1.4-1.4M6.5 6.5L5.1 5.1"/>',
 };
-function tabIconSvg(id){
-  const paths = TAB_ICONS[id] || '';
-  return `<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
-}
 // Set de íconos para las acciones más comunes/repetidas de la app (punto 2), del
 // mismo estilo que los de la navegación — reemplazan los emojis sueltos en botones.
+// swords/camera/repeat sumados para comparar-cara a cara, compartir tarjeta y revancha.
 const ACTION_ICONS = {
   share: '<circle cx="15" cy="4.5" r="2.2"/><circle cx="5" cy="10" r="2.2"/><circle cx="15" cy="15.5" r="2.2"/><path d="M7 8.8l6-3M7 11.2l6 3"/>',
   shuffle: '<path d="M2 5h3l8 10h4M2 15h3l3-3.8M14 5h4M15.5 3l2.5 2-2.5 2M15.5 17l2.5-2-2.5-2"/>',
@@ -2905,10 +3072,17 @@ const ACTION_ICONS = {
   install: '<path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 16h12"/>',
   download: '<path d="M10 3v10M6 9l4 4 4-4"/><path d="M4 16.5h12"/>',
   upload: '<path d="M10 16V6M6 10l4-4 4 4"/><path d="M4 16.5h12"/>',
+  swords: '<path d="M3 3l6 6M17 3l-6 6M4 15l3 2 2-3M13 14l3 3 2-2"/><path d="M9 9l-6 8M11 9l6 8"/>',
+  camera: '<path d="M6 6l1.2-2h5.6L14 6h2.5A1.5 1.5 0 0118 7.5v7A1.5 1.5 0 0116.5 16h-13A1.5 1.5 0 012 14.5v-7A1.5 1.5 0 013.5 6H6z"/><circle cx="10" cy="10.5" r="3"/>',
+  repeat: '<path d="M4 8V6a2 2 0 012-2h9M15 4l-2.5-2.5M15 4l-2.5 2.5"/><path d="M16 12v2a2 2 0 01-2 2H5M5 16l2.5 2.5M5 16l2.5-2.5"/>',
 };
 function actionIconSvg(name){
   const paths = ACTION_ICONS[name] || '';
   return `<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;">${paths}</svg>`;
+}
+function tabIconSvg(id){
+  const paths = TAB_ICONS[id] || '';
+  return `<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 }
 function renderTabs(){
   const visible = TABS.filter(t => !t.adminOnly || state.isAdmin);
@@ -3105,15 +3279,16 @@ function nextMatchWidgetHtml(playerId){
 
   const recentRows = results.slice(-8).reverse().map(r => `
     <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
-      <span>${fmtDate(r.date)} · ${esc(r.label)}</span>
+      <span>${fmtDate(r.date)} · ${esc(r.label)}${r.opponentId?` vs. ${esc(playerName(r.opponentId))}`:''}</span>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✔ Victoria':'❌ Derrota'}</span>
+        ${r.opponentId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.issueChallenge('${r.opponentId}')" title="Desafiar de nuevo">${actionIconSvg('repeat')} Revancha</button>` : ''}
         ${r.matchId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${r.matchId}')">📲 Tarjeta</button>` : ''}
       </div>
     </div>`).join('');
 
   return `
-    <div class="section-head"><h2>👤 Mi Perfil</h2><button class="btn btn-ghost btn-sm" onclick="AceApp.generatePlayerCardImage('${state.myPlayerId}')">📸 Compartir mi tarjeta</button></div>
+    <div class="section-head"><h2>👤 Mi Perfil</h2><button class="btn btn-ghost btn-sm" onclick="AceApp.generatePlayerCardImage('${state.myPlayerId}')">${actionIconSvg('camera')} Compartir mi tarjeta</button></div>
     ${nextMatchWidgetHtml(state.myPlayerId)}
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
@@ -3394,7 +3569,7 @@ function viewRanking(){
     const mv = movement[r.id] || { posDelta: 0, lastPts: 0 };
 
     return `
-      <div class="rank-row ${topClass}">
+      <div class="rank-row ${topClass} ${streak >= 3 ? 'rank-row-hot' : ''}">
         <div class="rank-pos">${r.rank}${posDeltaHtml(mv.posDelta)}</div>
         <div class="rank-clickable" onclick="AceApp.openPlayerProfileModal('${r.id}')">
           ${playerAvatarWithFireHtml(p, 46, streak)}
@@ -3405,7 +3580,7 @@ function viewRanking(){
           </div>
         </div>
         <div class="rank-actions">
-          <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openMyH2H('${r.id}')">⚔️</button>
+          <button class="btn btn-ghost btn-sm rank-h2h-btn" title="Cara a cara" onclick="event.stopPropagation();AceApp.openMyH2H('${r.id}')">${actionIconSvg('swords')}</button>
           <div class="rank-pts"><span class="num">${fmtPts(r.points)}</span>${lastPtsHtml(mv.lastPts)}<span class="lbl">pts</span></div>
         </div>
       </div>
@@ -3417,13 +3592,15 @@ function viewRanking(){
       <h2>Ranking Individual</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${state.isAdmin ? `<button class="btn btn-primary btn-sm" onclick="AceApp.openCasualMatchModal()">+ Anotar Partido Libre</button>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">⚔️ Cara a cara</button>
-        <button class="btn btn-ghost btn-sm" onclick="AceApp.generateRankingCardImage()">📸 Compartir ranking</button>
+        <button class="btn btn-ghost btn-sm" onclick="AceApp.openH2HModal()">${actionIconSvg('swords')} Cara a cara</button>
+        <button class="btn btn-ghost btn-sm" onclick="AceApp.generateRankingCardImage()">${actionIconSvg('camera')} Compartir ranking</button>
       </div>
     </div>
     ${subNavHtml}
     <div class="section-sub">Puntos acumulados por games en torneos y desafíos libres.</div>
     ${liveMatchesBannerHtml()}
+    ${mvpVoteCardHtml()}
+    ${activityFeedHtml(6)}
     ${rankingEvolutionSvg()}
     <div class="rank-table">${rows}</div>
     ${casualMatchesListHtml('singles')}
@@ -3606,7 +3783,7 @@ function podiumHtml(t, isDoubles){
 // ---------- VIEW: PLAYERS ----------
 function viewPlayers(){
   const head = `<div class="section-head"><h2>Jugadores</h2><div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <button class="btn btn-ghost" onclick="AceApp.openH2HModal()">⚔️ Comparar</button>
+    <button class="btn btn-ghost" onclick="AceApp.openH2HModal()">${actionIconSvg('swords')} Comparar</button>
     ${state.isAdmin?`<button class="btn btn-primary" onclick="AceApp.openPlayerModal()">+ Nuevo jugador</button>`:''}
   </div></div>`;
   if(state.players.length===0){
@@ -3654,7 +3831,7 @@ function playersGridHtml(){
       ${manualHtml?`<div class="player-badges" style="margin-top:6px;">${manualHtml}</div>`:''}
      <div class="card-actions">
           ${state.myPlayerId && p.id !== state.myPlayerId ? `
-            <button class="btn btn-ball btn-sm" onclick="AceApp.issueChallenge('${p.id}')">⚔️ Desafiar</button>
+            <button class="btn btn-ball btn-sm" onclick="AceApp.issueChallenge('${p.id}')">${actionIconSvg('swords')} Desafiar</button>
           ` : ''}
           <button class="btn btn-ghost btn-sm" onclick="AceApp.openMyH2H('${p.id}')">🤝 Comparar</button>
           ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openPlayerModal('${p.id}')">Editar</button>` : ''}
@@ -5571,8 +5748,10 @@ function toggleCasualMode(mode){
   if(a2) a2.style.display = show ? '' : 'none';
   if(b2) b2.style.display = show ? '' : 'none';
 }
+let tempMatchPhoto = null;
 function openCasualMatchModal() {
   clearPendingLiveStats();
+  tempMatchPhoto = null;
   if (!state.isAdmin) { aceAlert('Solo el administrador puede anotar partidos libres.'); return; }
   if (state.players.length < 2) { 
     aceAlert('Se necesitan al menos 2 jugadores registrados.'); 
@@ -5617,6 +5796,14 @@ function openCasualMatchModal() {
     </div>
 
     <div class="field"><label>Fecha</label><input type="date" id="cm-date" value="${new Date().toISOString().slice(0,10)}"></div>
+
+    <div class="field">
+      <label>Foto del partido (opcional)</label>
+      <div class="photo-picker">
+        <div id="match-photo-preview" style="width:64px;height:64px;border-radius:10px;overflow:hidden;background:var(--court-3);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">Sin foto</div>
+        <input type="file" accept="image/*" onchange="AceApp.handleMatchPhoto(event)">
+      </div>
+    </div>
 
     <div class="field-row">
       <div class="field">
@@ -5727,7 +5914,8 @@ async function saveCasualMatch(btn) {
     sideA,
     sideB,
     matchRules,
-    sets
+    sets,
+    photo: tempMatchPhoto || null
   };
 
   const pending = window.AceApp._lastLiveStats;
@@ -5745,16 +5933,27 @@ async function saveCasualMatch(btn) {
   });
   if(ok){ playHitSound(); aceAlert('🎾 ¡Partido guardado y puntos cargados al ranking!'); }
 }
- function casualMatchesRowHtml(m){
+ // Lightbox simple para la foto de un partido libre (punto 48 de mejoras).
+function viewMatchPhoto(matchId){
+  const m = (state.casualMatches||[]).find(x=>x.id===matchId);
+  if(!m || !m.photo) return;
+  openModal(`<button class="close-x" onclick="AceApp.closeModal()">✕</button>
+    <h2>📷 Foto del partido</h2>
+    <img src="${m.photo}" style="width:100%;border-radius:10px;display:block;">`);
+}
+function casualMatchesRowHtml(m){
   const modeLabel = m.mode === 'doubles' ? 'Dobles' : 'Singles';
   const labelA = m.sideA.map(playerName).join(' / ');
   const labelB = m.sideB.map(playerName).join(' / ');
   const score = (m.sets || []).map(s => `${s[0]}-${s[1]}`).join(' ');
 
   return `<div class="podium-row" style="padding:10px 0;align-items:center;">
-    <div>
-      <div><strong>${esc(labelA)}</strong> <span style="color:var(--muted);">vs</span> <strong>${esc(labelB)}</strong></div>
-      <div class="tourn-meta">${modeLabel} · ${m.date || 'Sin fecha'}</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      ${m.photo ? `<img src="${m.photo}" onclick="AceApp.viewMatchPhoto('${m.id}')" style="width:44px;height:44px;border-radius:8px;object-fit:cover;cursor:pointer;flex-shrink:0;" title="Ver foto">` : ''}
+      <div>
+        <div><strong>${esc(labelA)}</strong> <span style="color:var(--muted);">vs</span> <strong>${esc(labelB)}</strong></div>
+        <div class="tourn-meta">${modeLabel} · ${m.date || 'Sin fecha'}</div>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span class="disp" style="font-size:20px;color:var(--ball);">${score}</span>
@@ -5849,7 +6048,7 @@ function showH2H(){
   const barsHtml = h2hStatBarsHtml(pA, pB, rec);
 
   if (rec.matches.length === 0) {
-    el.innerHTML = radarHtml + barsHtml + h2hEvolutionSvg(idA, idB) + `<div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">📸 Compartir tarjeta versus</button></div><div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
+    el.innerHTML = radarHtml + barsHtml + h2hEvolutionSvg(idA, idB) + `<div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">${actionIconSvg('camera')} Compartir tarjeta versus</button></div><div class="empty">${esc(playerName(idA))} y ${esc(playerName(idB))} todavía no tienen partidos con marcador cargado entre ellos.</div>`;
     return;
   }
 
@@ -5859,7 +6058,7 @@ function showH2H(){
     ${radarHtml}
     ${barsHtml}
     ${h2hEvolutionSvg(idA, idB)}
-    <div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">📸 Compartir tarjeta versus</button></div>
+    <div style="margin:10px 0;"><button class="btn btn-ghost btn-sm" onclick="AceApp.generateVersusCardImage('${idA}','${idB}')">${actionIconSvg('camera')} Compartir tarjeta versus</button></div>
     <div class="podium">${rows}</div>`;
 }
 // Gráfico de "Momentum": muestra cómo evolucionó la ventaja en games durante el partido.
@@ -5976,7 +6175,7 @@ function generateMatchCardHtml(match) {
     const aId = match.sideA[0], bId = match.sideB[0];
     const rivalId = aId === state.myPlayerId ? bId : (bId === state.myPlayerId ? aId : null);
     if (rivalId) {
-      rematchBtn = `<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;" onclick="AceApp.closeModal(); AceApp.issueChallenge('${rivalId}')">⚡ Revancha rápida vs ${esc(playerName(rivalId))}</button>`;
+      rematchBtn = `<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;" onclick="AceApp.closeModal(); AceApp.issueChallenge('${rivalId}')">${actionIconSvg('repeat')} Revancha rápida vs ${esc(playerName(rivalId))}</button>`;
     }
   }
 
@@ -6107,9 +6306,10 @@ function openPlayerProfileModal(playerId){
 
   const recentRows = results.slice(-8).reverse().map(r => `
   <div class="podium-row" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;">
-    <span>${fmtDate(r.date)} · ${esc(r.label)}</span>
+    <span>${fmtDate(r.date)} · ${esc(r.label)}${r.opponentId?` vs. ${esc(playerName(r.opponentId))}`:''}</span>
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="color:${r.won?'var(--ball)':'var(--muted)'};font-weight:600;">${r.won?'✔ Victoria':'❌ Derrota'}</span>
+      ${r.opponentId===state.myPlayerId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.issueChallenge('${playerId}')" title="Desafiar de nuevo">${actionIconSvg('repeat')} Revancha</button>` : ''}
       ${r.matchId ? `<button class="btn btn-ghost btn-sm" onclick="AceApp.openMatchCardModal('${r.matchId}')">📲 Tarjeta</button>` : ''}
     </div>
   </div>`).join('');
@@ -6143,7 +6343,7 @@ function openPlayerProfileModal(playerId){
     <div class="podium">${recentRows || '<div class="tourn-meta">Sin partidos con marcador todavía.</div>'}</div>
     <div class="modal-actions">
       <button class="btn btn-ghost btn-sm" onclick="AceApp.openMyH2H('${playerId}')">🤝 Cara a cara</button>
-      <button class="btn btn-ghost btn-sm" onclick="AceApp.generatePlayerCardImage('${playerId}')">📸 Compartir tarjeta</button>
+      <button class="btn btn-ghost btn-sm" onclick="AceApp.generatePlayerCardImage('${playerId}')">${actionIconSvg('camera')} Compartir tarjeta</button>
       <button class="btn btn-ghost" onclick="AceApp.closeModal()">Cerrar</button>
     </div>`;
   openModal(html);
@@ -6214,6 +6414,31 @@ function openPlayerModal(id, linkAsMe){
   openModal(html);
 }
 let cropState = null;
+// Foto de partido (punto 48 de mejoras): más simple que la de perfil, sin recorte
+// manual — solo redimensiona al lado más largo y comprime a JPEG, para no inflar
+// el documento de Firestore con fotos pesadas.
+function handleMatchPhoto(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      const maxSide = 900;
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      tempMatchPhoto = canvas.toDataURL('image/jpeg', 0.8);
+      const prev = document.getElementById('match-photo-preview');
+      if(prev) prev.innerHTML = `<img src="${tempMatchPhoto}" style="width:100%;height:100%;object-fit:cover;">`;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 function handlePhoto(ev){
   const file = ev.target.files[0];
   if(!file) return;
@@ -7081,7 +7306,7 @@ window.AceApp = {
   openIdentityModal, setIdentity,
   openAdminModal, checkAdminPin, setAdminPin, exitAdmin, resetAdminPin,
   downloadBackup, triggerRestore, handleRestoreFile, __resolveConfirm,
-  openMatchModal, saveMatch, deleteMatch, openH2HModal, openMyH2H, showH2H, drawBracket, openPlayerProfileModal, shareTournament,
+  openMatchModal, saveMatch, deleteMatch, openH2HModal, openMyH2H, showH2H, drawBracket, openPlayerProfileModal, shareTournament, openMvpVoteModal, submitMvpVote, openActivityFeedModal,
   openSettingsModal, saveSettings,
   openTournamentModal, saveTournament, deleteTournament, selectTier,
   openParticipantsModal, saveParticipants, openResultsModal, saveResults,
@@ -7089,7 +7314,7 @@ window.AceApp = {
   openDoublesResultsModal, saveDoublesResults,
   openAchievementModal, saveAchievement, deleteAchievement, pickSuggested,
   togglePaid, markAllPaid, openExpenseModal, saveExpense, deleteExpense, bootApp,
-  openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire,
+  openCasualMatchModal, saveCasualMatch, toggleCasualMode,deleteCasualMatch, toggleCasualSets, runCasualLiveUmpire, handleMatchPhoto, viewMatchPhoto,
   filterPlayers, setTournamentSort, setTournamentsSubTab, onCropZoom, applyCrop, toggleTextSize, initHolographicCards,
   setAchSubTab,setProfileMode, setAchCategory, setAchSearch, toggleShowcase,
   cycleSurface, toggleSounds, toggleDensity, toggleLightMode, toggleSettingsMenu,
