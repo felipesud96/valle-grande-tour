@@ -771,6 +771,20 @@
 </style>
 
 <div id="ace-app">
+<script>
+// Anti-flash de tema: el tema real vive en Firestore (async, tarda un round-trip),
+// así que mientras esa consulta no vuelve, el skeleton se veía siempre en oscuro
+// (el CSS por defecto de #ace-app sin data-theme). Guardamos una copia del tema
+// en localStorage (sincrónico) y la aplicamos acá, antes de pintar nada más, para
+// que el skeleton ya nazca con el tema correcto. loadAll() confirma/corrige esto
+// apenas responde Firestore.
+(function(){
+  try {
+    var cached = localStorage.getItem('vgt-light-mode');
+    if(cached === '1'){ document.getElementById('ace-app').setAttribute('data-theme', 'light'); }
+  } catch(e){}
+})();
+</script>
   <div id="ace-splash">
     <video id="splash-video" muted playsinline autoplay loop></video>
     <canvas id="splash-canvas"></canvas>
@@ -1815,7 +1829,12 @@ async function loadAll(){
   state.surface = await safeGet('surface-theme', 'clay', false);
   state.soundsOn = await safeGet('sounds-on', true, false);
   state.density = await safeGet('list-density', 'comfortable', false);
-  state.lightMode = await safeGet('light-mode', false, false);
+  // El default acá viene del caché local (aplicado ya al vuelo arriba en el <script>
+  // inline) para que no haya "parpadeo" mientras se espera la respuesta de Firestore.
+  let cachedLightMode = false;
+  try { cachedLightMode = localStorage.getItem('vgt-light-mode') === '1'; } catch(e){}
+  state.lightMode = await safeGet('light-mode', cachedLightMode, false);
+  try { localStorage.setItem('vgt-light-mode', state.lightMode ? '1' : '0'); } catch(e){}
   applySurfaceTheme();
   state.loaded = true;
 }
@@ -6993,6 +7012,7 @@ async function toggleDensity(){
 async function toggleLightMode(){
   state.lightMode = !state.lightMode;
   applySurfaceTheme();
+  try { localStorage.setItem('vgt-light-mode', state.lightMode ? '1' : '0'); } catch(e){}
   await save('light-mode', state.lightMode, false);
 }
 // Abre/cierra el menú de ajustes (engranaje). Se cierra solo si se hace clic afuera.
